@@ -3,9 +3,6 @@ const { GPU } = require('gpu.js'),
 
 const benchmark = (options = {}) => {
   options.numBenchmarks = options.numBenchmarks || 1
-  options.mult = options.mult || true
-  options.convolution = options.convolution || true
-  options.pipeline = options.pipeline || true
 
   options.matrixSize = options.matrixSize || 512
   options.kernelSIze = options.kernelSIze || 3

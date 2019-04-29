@@ -1,7 +1,11 @@
+const now = require('performance-now')
 module.exports = func => {
-  const time = performance.now() * (-1)
+
+  let time = now() * (-1)
   const ret = func()
-  time += performance.now()
+  time += now()
+  time *= 100
+  time = Math.floor(time) / 100
 
   return {
     ret,

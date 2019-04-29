@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "description": "A benchmarking tool for gpu.js",
   "main": "src/index.js",
+  "scripts": {
+    "start": "node ./index.js"
+  },
   "repository": "https://github.com/gpujs/benchmark.git",
   "author": "gpujs",
   "license": "MIT",
   "dependencies": {
-    "gpu.js": "2.0.0-rc.13"
+    "gpu.js": "2.0.0-rc.13",
+    "performance-now": "^2.1.0"
   }
 }

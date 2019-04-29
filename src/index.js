@@ -1,7 +1,7 @@
 const { GPU } = require('gpu.js'),
   run = require('./run')
 
-const benchmark = (options) => {
+const benchmark = (options = {}) => {
   options.numBenchmarks = options.numBenchmarks || 1
   options.mult = options.mult || true
   options.convolution = options.convolution || true

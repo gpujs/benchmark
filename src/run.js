@@ -1,8 +1,8 @@
-const benchIt = require('./benchIt'),
-  generateMatrices = require('./generateMatrices'),
-  { paddificate, matConvFunc, kernel } = require('./conv')
+const benchIt = require('./bench-it'),
+  generateMatrices = require('./generate-matrices'),
+  { paddificate, matConvFunc, kernel } = require('./conv');
 
-const run = (options) => {
+const run = options => {
   const matMultFunc = `function(a, b) {
     let sum = 0;
     for (let i = 0; i < 512; i++) {
@@ -39,7 +39,7 @@ const run = (options) => {
     }),
   }
 
-  const mat = benchIt(() => generateMatrices(options.matrixSize))
+  const mat = benchIt(() => generateMatrices(options.matrixSize));
 
   const benches = {
     matGen: mat.time,
@@ -69,7 +69,7 @@ const run = (options) => {
     }
   }
 
-  return benches
+  return benches;
 }
 
-module.exports = run
+module.exports = run;

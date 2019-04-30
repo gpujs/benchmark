@@ -43,7 +43,7 @@ const run = options => {
     }
   }
 
-  for (let i = 0; i < options.numBenchmarks; i++){
+  for (let i = 1; i <= options.numBenchmarks; i++){
     benchmarks.mat_mult.gpu.push(benchIt(() => funcs.mat_mult.gpu(mat.ret[0], mat.ret[1])).time);
     benchmarks.mat_mult.pipe.push(benchIt(() => funcs.mat_mult.pipe(mat.ret[0], mat.ret[1])).time);
     benchmarks.mat_mult.cpu.push(benchIt(() => funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])).time);
@@ -51,6 +51,8 @@ const run = options => {
     benchmarks.mat_conv.gpu.push(benchIt(() => funcs.mat_conv.gpu(padded.ret, kernel)).time);
     benchmarks.mat_conv.pipe.push(benchIt(() => funcs.mat_conv.pipe(padded.ret, kernel)).time);
     benchmarks.mat_conv.cpu.push(benchIt(() => funcs.mat_conv.cpu(padded.ret, kernel)).time);
+
+    console.log(`Benchmark ${i} completed`)
   }
 
   const benches = {

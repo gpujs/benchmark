@@ -1,7 +1,21 @@
 const bench = require('./src/index'),
   logMinMax = require('./log-min-max');
+let options;
 
-const benchmarks = bench();
+if (typeof process.argv[2] != 'undefined') {
+  try {
+    options = JSON.parse(process.argv[2].toString());
+  }
+  catch (e) {
+    console.log('Options argument is not a valid JSON string, running benchmarks without any options');
+    setTimeout(() => options = {}, 5000);
+  }
+}
+else {
+  options = {};
+}
+
+const benchmarks = bench(options);
 
 console.log(``);
 console.log(`matrix generation time: ${benchmarks.mat_gen}ms`);

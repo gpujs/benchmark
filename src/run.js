@@ -1,46 +1,18 @@
 const benchIt = require('./bench-it'),
   generateMatrices = require('./generate-matrices'),
-  { paddificate, matConvFunc, kernel } = require('./conv');
+  getMinMaxAvg = require('./get-min-max'),
+  matMult = require('./benches/matrix-multiplication'),
+  matConv = require('./benches/convolution'),
+  { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution')
 
 const run = options => {
-  const matMultFunc = `function(a, b) {
-    let sum = 0;
-    for (let i = 0; i < 512; i++) {
-      sum += a[this.thread.y][i] * b[i][this.thread.x];
-    }
-    return sum;
-  }`
+  const mat = benchIt(() => generateMatrices(options.matrixSize)),
+    padded = benchIt(() => paddificate(mat.ret[0], paddingX, paddingY));
 
   const funcs = {
-    matMult: options.gpu.createKernel(matMultFunc, {
-      output: [options.matrixSize, options.matrixSize]
-    }),
-
-    matMultPipe: options.gpu.createKernel(matMultFunc, {
-      output: [options.matrixSize, options.matrixSize],
-      pipeline: true
-    }),
-
-    matMultCpu: options.cpu.createKernel(matMultFunc, {
-      output: [options.matrixSize, options.matrixSize]
-    }),
-
-    matConv: options.gpu.createKernel(matConvFunc, {
-      output: [options.matrixSize, options.matrixSize]
-    }),
-
-    matConvPipe: options.gpu.createKernel(matConvFunc, {
-      output: [options.matrixSize, options.matrixSize],
-      pipeline: true
-    }),
-
-    matConvCpu: options.cpu.createKernel(matConvFunc, {
-      output: [options.matrixSize, options.matrixSize]
-    }),
+    mat_mult: matMult.generateFuncs(options.gpu, options.cpu, options.output),
+    mat_conv: matConv.generateFuncs(options.gpu, options.cpu, options.output)
   }
-
-  const mat = benchIt(() => generateMatrices(options.matrixSize)),
-  padded = benchIt(() => paddificate(mat.ret[0]))
 
   const benchmarks = {
     mat_mult: {
@@ -55,28 +27,44 @@ const run = options => {
     }
   }
 
-  for (let i = 0; i < options.numBenchmarks; i++){
-    benchmarks.mat_mult.gpu.push(benchIt(() => funcs.matMult(mat.ret[0], mat.ret[1])).time)
-    benchmarks.mat_mult.pipe.push(benchIt(() => funcs.matMultPipe(mat.ret[0], mat.ret[1])).time)
-    benchmarks.mat_mult.cpu.push(benchIt(() => funcs.matMultCpu(mat.ret[0], mat.ret[1])).time)
+  const build_time = {
+    mat_mult: {
+      gpu: benchIt(() => {funcs.mat_mult.gpu.build(mat.ret[0], mat.ret[1])}).time,
+      pipe: benchIt(() => {funcs.mat_mult.pipe.build(mat.ret[0], mat.ret[1])}).time
+    },
+    matConv: {
+      gpu: benchIt(() => {funcs.mat_conv.gpu.build(padded.ret, kernel)}).time,
+      pipe: benchIt(() => {funcs.mat_conv.pipe.build(padded.ret, kernel)}).time
+    }
+  }
 
-    benchmarks.mat_conv.gpu.push(benchIt(() => funcs.matConv(padded.ret, kernel)).time)
-    benchmarks.mat_conv.gpu.push(benchIt(() => funcs.matConvPipe(padded.ret, kernel)).time)
-    benchmarks.mat_conv.gpu.push(benchIt(() => funcs.matConvCpu(padded.ret, kernel)).time)
+  for (let i = 0; i < options.numBenchmarks; i++){
+    benchmarks.mat_mult.gpu.push(benchIt(() => funcs.mat_mult.gpu(mat.ret[0], mat.ret[1])).time);
+    benchmarks.mat_mult.pipe.push(benchIt(() => funcs.mat_mult.pipe(mat.ret[0], mat.ret[1])).time);
+    benchmarks.mat_mult.cpu.push(benchIt(() => funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])).time);
+
+    benchmarks.mat_conv.gpu.push(benchIt(() => funcs.mat_conv.gpu(padded.ret, kernel)).time);
+    benchmarks.mat_conv.pipe.push(benchIt(() => funcs.mat_conv.pipe(padded.ret, kernel)).time);
+    benchmarks.mat_conv.cpu.push(benchIt(() => funcs.mat_conv.cpu(padded.ret, kernel)).time);
   }
 
   const benches = {
-    matGen: mat.time,
-    matPad: padded.time,
+    mat_gen: mat.time,
+    mat_pad: padded.time,
 
-    build_time: {
-      matMult: {
-        gpu: benchIt(() => {funcs.matMult.build(mat.ret[0], mat.ret[1])}).time,
-        pipe: benchIt(() => {funcs.matMultPipe.build(mat.ret[0], mat.ret[1])}).time
+    build_time,
+
+    run_time: {
+      mat_mult: {
+        gpu: getMinMaxAvg(benchmarks.mat_mult.gpu),
+        pipe: getMinMaxAvg(benchmarks.mat_mult.pipe),
+        cpu: getMinMaxAvg(benchmarks.mat_mult.cpu)
       },
-      matConv: {
-        gpu: benchIt(() => {funcs.matConv.build(padded.ret, kernel)}).time,
-        pipe: benchIt(() => {funcs.matConvPipe.build(padded.ret, kernel)}).time
+
+      mat_conv: {
+        gpu: getMinMaxAvg(benchmarks.mat_conv.gpu),
+        pipe: getMinMaxAvg(benchmarks.mat_conv.pipe),
+        cpu: getMinMaxAvg(benchmarks.mat_conv.cpu)
       }
     }
   }

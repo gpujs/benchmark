@@ -8,7 +8,16 @@ const kernelX = kernel[0].length,
   paddingX = Math.floor(kernelX / 2),
   paddingY = Math.floor(kernelY / 2);
 
-const paddificate = array => {
+
+/**
+ * @method paddificate
+ * @description Pads a JavaScript array.
+ * @param {Float32Array} array Input array.
+ * @param {Number} paddingX x-axis padding size.
+ * @param {Number} paddingY y-axis padding size.
+ * @returns {Float32Array}
+ */
+const paddificate = (array, paddingX, paddingY) => {
   let out = [];
 
     for (var y = 0; y < array.length + paddingY * 2; y++){
@@ -33,6 +42,29 @@ const matConvFunc = `function (array, kernel) {
   return sum;
 }`;
 
+/**
+ * @method generateFuncs 
+ * @description Generates kernel convolution functions.
+ * @param {"GPU"} gpu A GPU.js GPU object.
+ * @param {"GPU(mode=cpu)"} cpu A GPU.js object of mode=cpu
+ * @param {Float32Array|"Object"} output The output size
+ * @returns {"Object"}
+ */
+const generateFuncs = (gpu, cpu, output) => {
+  return {
+    gpu: gpu.createKernel(matConvFunc, {
+      output
+    }),
+    pipe: gpu.createKernel(matConvFunc, {
+      output,
+      pipeline: true
+    }),
+    cpu: cpu.createKernel(matConvFunc, {
+      output
+    })
+  }
+}
+
 module.exports = {
   kernel,
   kernelX,
@@ -40,5 +72,6 @@ module.exports = {
   paddingX,
   paddingY,
   paddificate,
-  matConvFunc
+  matConvFunc,
+  generateFuncs
 }

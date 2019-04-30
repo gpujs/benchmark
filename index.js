@@ -1,5 +1,5 @@
 const bench = require('./src/index'),
-  logMinMax = require('./log-min-max');
+  logMinMax = require('./src/cli/log-min-max');
 let options;
 
 if (typeof process.argv[2] != 'undefined') {

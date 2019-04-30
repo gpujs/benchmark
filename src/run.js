@@ -1,6 +1,6 @@
-const benchIt = require('./bench-it'),
-  generateMatrices = require('./generate-matrices'),
-  getMinMaxAvg = require('./get-min-max'),
+const benchIt = require('./util/bench-it'),
+  generateMatrices = require('./benches/generate-matrices'),
+  getMinMaxAvg = require('./util/get-min-max'),
   matMult = require('./benches/matrix-multiplication'),
   matConv = require('./benches/convolution'),
   { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution')

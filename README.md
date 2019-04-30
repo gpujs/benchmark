@@ -161,7 +161,7 @@ The returned output is a JavaScript `Object` with the following structure.
 ### Options
 Options are optional parameters as a JavaScript `Object`.
 #### Properties
-1. `numBenchmarks`(Number): Number of times to run a benchmark. The output values will be `min`, `max` and `avg` of all the benchmarks. (default: `1`)
-2. `matrixSize`(Number): Size of the benchmark matrix which is uniform i.e. equal number of comlumns and rows.
+1. `num_benchmarks`(Number): Number of times to run a benchmark. The output values will be `min`, `max` and `avg` of all the benchmarks. (default: `1`)
+2. `matrix_size`(Number): Size of the benchmark matrix which is uniform i.e. equal number of comlumns and rows.
 3. `cpu`(Object): An optional custom `GPU` object with `{mode: 'cpu'}`(To use a specific version).
 4. `gpu`(Object): An optional custom `GPU` object (To use a specific version but version has to be >= 2.0.0)

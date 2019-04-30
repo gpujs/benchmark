@@ -11,7 +11,7 @@ const benchIt = require('./bench-it'),
  * @return {"Object"}
  */
 const run = options => {
-  const mat = benchIt(() => generateMatrices(options.matrixSize)),
+  const mat = benchIt(() => generateMatrices(options.matrix_size)),
     padded = benchIt(() => paddificate(mat.ret[0], paddingX, paddingY));
 
   const funcs = {
@@ -43,7 +43,7 @@ const run = options => {
     }
   }
 
-  for (let i = 1; i <= options.numBenchmarks; i++){
+  for (let i = 1; i <= options.num_benchmarks; i++){
     benchmarks.mat_mult.gpu.push(benchIt(() => funcs.mat_mult.gpu(mat.ret[0], mat.ret[1])).time);
     benchmarks.mat_mult.pipe.push(benchIt(() => funcs.mat_mult.pipe(mat.ret[0], mat.ret[1])).time);
     benchmarks.mat_mult.cpu.push(benchIt(() => funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])).time);

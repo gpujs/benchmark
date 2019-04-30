@@ -2,10 +2,10 @@ const { GPU } = require('gpu.js'),
   run = require('./run');
 
 const benchmark = (options = {}) => {
-  options.numBenchmarks = options.numBenchmarks || 1;
+  options.num_benchmarks = options.num_benchmarks || 1;
 
-  options.matrixSize = options.matrixSize || 512;
-  options.output = [options.matrixSize, options.matrixSize];
+  options.matrix_size = options.matrix_size || 512;
+  options.output = [options.matrix_size, options.matrix_size];
 
   options.gpu = options.gpu || new GPU();
   options.cpu = options.cpu || new GPU({mode: 'cpu'});

@@ -40,7 +40,30 @@ const run = options => {
   }
 
   const mat = benchIt(() => generateMatrices(options.matrixSize)),
-    padded = benchIt(() => paddificate(mat.ret[0]))
+  padded = benchIt(() => paddificate(mat.ret[0]))
+
+  const benchmarks = {
+    mat_mult: {
+      gpu: [],
+      pipe: [],
+      cpu: []
+    },
+    mat_conv: {
+      gpu: [],
+      pipe: [],
+      cpu: []
+    }
+  }
+
+  for (let i = 0; i < options.numBenchmarks; i++){
+    benchmarks.mat_mult.gpu.push(benchIt(() => funcs.matMult(mat.ret[0], mat.ret[1])).time)
+    benchmarks.mat_mult.pipe.push(benchIt(() => funcs.matMultPipe(mat.ret[0], mat.ret[1])).time)
+    benchmarks.mat_mult.cpu.push(benchIt(() => funcs.matMultCpu(mat.ret[0], mat.ret[1])).time)
+
+    benchmarks.mat_conv.gpu.push(benchIt(() => funcs.matConv(padded.ret, kernel)).time)
+    benchmarks.mat_conv.gpu.push(benchIt(() => funcs.matConvPipe(padded.ret, kernel)).time)
+    benchmarks.mat_conv.gpu.push(benchIt(() => funcs.matConvCpu(padded.ret, kernel)).time)
+  }
 
   const benches = {
     matGen: mat.time,
@@ -54,19 +77,6 @@ const run = options => {
       matConv: {
         gpu: benchIt(() => {funcs.matConv.build(padded.ret, kernel)}).time,
         pipe: benchIt(() => {funcs.matConvPipe.build(padded.ret, kernel)}).time
-      }
-    },
-
-    run_time: {
-      matMult: {
-        gpu: benchIt(() => funcs.matMult(mat.ret[0], mat.ret[1])).time,
-        pipe: benchIt(() => funcs.matConvPipe(mat.ret[0], mat.ret[1])).time,
-        cpu: benchIt(() => funcs.matMultCpu(mat.ret[0], mat.ret[1])).time
-      },
-      matConv: {
-        gpu: benchIt(() => funcs.matConv(padded.ret, kernel)).time,
-        pipe: benchIt(() => funcs.matConvPipe(padded.ret, kernel)).time,
-        cpu: benchIt(() => funcs.matMultPipe(padded.ret, kernel)).time
       }
     }
   }

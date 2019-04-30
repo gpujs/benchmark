@@ -32,7 +32,7 @@ const run = options => {
       gpu: benchIt(() => {funcs.mat_mult.gpu.build(mat.ret[0], mat.ret[1])}).time,
       pipe: benchIt(() => {funcs.mat_mult.pipe.build(mat.ret[0], mat.ret[1])}).time
     },
-    matConv: {
+    mat_conv: {
       gpu: benchIt(() => {funcs.mat_conv.gpu.build(padded.ret, kernel)}).time,
       pipe: benchIt(() => {funcs.mat_conv.pipe.build(padded.ret, kernel)}).time
     }

@@ -12,7 +12,7 @@ console.log(`matrix multiplication (pipeline) compile time: ${benchmarks.build_t
 
 console.log(``);
 
-console.log(`MATRIX MULTIPLICATION RUN TIME`);
+console.log(`MATRIX MULTIPLICATION RUN TIME:`);
 logMinMax(benchmarks.run_time.mat_mult);
 
 console.log(``);

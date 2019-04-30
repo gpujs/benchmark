@@ -78,7 +78,7 @@ Here, `options` is a stringified JSON object.
 
 ##### Example
 ```sh
-yarn start '{"numBenchmarks": 4}'
+yarn start '{"num_benchmarks": 4}'
 ```
 
 ### Output

@@ -25,24 +25,26 @@ const run = options => {
       output: [options.matrixSize, options.matrixSize]
     }),
 
-    matConv: options.gpu.createKernel(matMultFunc, {
+    matConv: options.gpu.createKernel(matConvFunc, {
       output: [options.matrixSize, options.matrixSize]
     }),
 
-    matConvPipe: options.gpu.createKernel(matMultFunc, {
+    matConvPipe: options.gpu.createKernel(matConvFunc, {
       output: [options.matrixSize, options.matrixSize],
       pipeline: true
     }),
 
-    matConvCpu: options.cpu.createKernel(matMultFunc, {
+    matConvCpu: options.cpu.createKernel(matConvFunc, {
       output: [options.matrixSize, options.matrixSize]
     }),
   }
 
-  const mat = benchIt(() => generateMatrices(options.matrixSize));
+  const mat = benchIt(() => generateMatrices(options.matrixSize)),
+    padded = benchIt(() => paddificate(mat.ret[0]))
 
   const benches = {
     matGen: mat.time,
+    matPad: padded.time,
 
     build_time: {
       matMult: {
@@ -50,8 +52,8 @@ const run = options => {
         pipe: benchIt(() => {funcs.matMultPipe.build(mat.ret[0], mat.ret[1])}).time
       },
       matConv: {
-        gpu: benchIt(() => {funcs.matConv.build(mat.ret[0], mat.ret[1])}).time,
-        pipe: benchIt(() => {funcs.matConvPipe.build(mat.ret[0], mat.ret[1])}).time
+        gpu: benchIt(() => {funcs.matConv.build(padded.ret, kernel)}).time,
+        pipe: benchIt(() => {funcs.matConvPipe.build(padded.ret, kernel)}).time
       }
     },
 
@@ -62,9 +64,9 @@ const run = options => {
         cpu: benchIt(() => funcs.matMultCpu(mat.ret[0], mat.ret[1])).time
       },
       matConv: {
-        gpu: benchIt(() => funcs.matConv(mat.ret[0], mat.ret[1])).time,
-        pipe: benchIt(() => funcs.matConvPipe(mat.ret[0], mat.ret[1])).time,
-        cpu: benchIt(() => funcs.matMultPipe(mat.ret[0], mat.ret[1])).time
+        gpu: benchIt(() => funcs.matConv(padded.ret, kernel)).time,
+        pipe: benchIt(() => funcs.matConvPipe(padded.ret, kernel)).time,
+        cpu: benchIt(() => funcs.matMultPipe(padded.ret, kernel)).time
       }
     }
   }

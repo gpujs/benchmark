@@ -5,6 +5,11 @@ const benchIt = require('./bench-it'),
   matConv = require('./benches/convolution'),
   { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution')
 
+/**
+ * @method run
+ * @param {Options} options
+ * @return {"Object"}
+ */
 const run = options => {
   const mat = benchIt(() => generateMatrices(options.matrixSize)),
     padded = benchIt(() => paddificate(mat.ret[0], paddingX, paddingY));

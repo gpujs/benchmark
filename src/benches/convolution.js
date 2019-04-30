@@ -15,7 +15,7 @@ const kernelX = kernel[0].length,
  * @param {Float32Array} array Input array.
  * @param {Number} paddingX x-axis padding size.
  * @param {Number} paddingY y-axis padding size.
- * @returns {Float32Array}
+ * @return {Float32Array}
  */
 const paddificate = (array, paddingX, paddingY) => {
   let out = [];

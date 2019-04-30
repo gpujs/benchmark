@@ -12,7 +12,7 @@ const matMultFunc = `function(a, b) {
  * @param {"GPU"} gpu A GPU.js GPU object.
  * @param {"GPU(mode=cpu)"} cpu A GPU.js object of mode=cpu
  * @param {Float32Array|"Object"} output The output size
- * @returns {"Object"}
+ * @return {"Object"}
  */
 const generateFuncs = (gpu, cpu, output) => {
   return {

@@ -69,7 +69,7 @@ const generateStatsObj = (run_time, build_time) => {
           run_time[bench][contenders[0]][rawDiff],
           run_time[bench][contenders[1]][rawDiff]
         )
-        if (run_time[bench][contenders[0]][rawDiff] == -1 || run_time[bench][contenders[1]][rawDiff] == -1) rawDiffs[rawDiff] = -1;
+        if (run_time[bench][contenders[0]][rawDiff] == -1 || run_time[bench][contenders[1]][rawDiff] == -1) rawDiffs[rawDiff].diff = -1;
       }
 
       const diff = {

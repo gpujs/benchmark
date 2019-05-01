@@ -10,7 +10,7 @@ const matMultFunc = `function(a, b) {
  * @method generateFuncs 
  * @description Generates matrix multiplication functions.
  * @param {"GPU"} gpu A GPU.js GPU object.
- * @param {"GPU(mode=cpu)"} cpu A GPU.js object of mode=cpu
+ * @param {"GPU"} cpu A GPU.js object with mode=cpu
  * @param {Float32Array|"Object"} output The output size
  * @return {"Object"}
  */

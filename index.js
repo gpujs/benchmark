@@ -1,5 +1,8 @@
 const bench = require('./src/index'),
-  logMinMax = require('./src/cli/log-min-max');
+  logMinMax = require('./src/cli/log-min-max'),
+  { GREEN_NO_UNDER, NC, RED_FLASH, YELLOW_UNDER } = require('./src/cli/colors'),
+  { br } = require('./src/cli/format');
+
 let options;
 
 if (typeof process.argv[2] != 'undefined') {
@@ -7,7 +10,7 @@ if (typeof process.argv[2] != 'undefined') {
     options = JSON.parse(process.argv[2].toString());
   }
   catch (e) {
-    console.log('Options argument is not a valid JSON string, running benchmarks without any options');
+    console.log(`${RED_FLASH}Options argument is not a valid JSON string, running benchmarks without any options${NC}`);
     setTimeout(() => options = {}, 5000);
   }
 }
@@ -17,25 +20,27 @@ else {
 
 const benchmarks = bench(options);
 
-console.log(``);
-console.log(`matrix generation time: ${benchmarks.mat_gen}ms`);
-console.log(`matrix padding time: ${benchmarks.mat_pad}ms`);
-console.log(``);
+br();
+console.log(`matrix generation time: ${YELLOW_UNDER}${benchmarks.mat_gen}${NC} ms`);
+console.log(`matrix padding time: ${YELLOW_UNDER}${benchmarks.mat_pad}${NC} ms`);
+br(2);
 
-console.log(`matrix multiplication compile time: ${benchmarks.build_time.mat_mult.gpu}ms`);
-console.log(`matrix multiplication (pipeline) compile time: ${benchmarks.build_time.mat_mult.pipe}ms`);
+console.log(`${GREEN_NO_UNDER}COMPILE TIME:${NC}`);
+br();
 
-console.log(``);
+console.log(`matrix multiplication compile time: ${YELLOW_UNDER}${benchmarks.build_time.mat_mult.gpu}${NC} ms`);
+console.log(`matrix multiplication (pipeline) compile time: ${YELLOW_UNDER}${benchmarks.build_time.mat_mult.pipe}${NC} ms`);
+br();
+console.log(`matrix convolution compile time: ${YELLOW_UNDER}${benchmarks.build_time.mat_conv.gpu}${NC} ms`);
+console.log(`matrix convolution (pipeline) compile time: ${YELLOW_UNDER}${benchmarks.build_time.mat_conv.pipe}${NC} ms`);
+br(2);
 
-console.log(`MATRIX MULTIPLICATION RUN TIME:`);
+console.log(`${GREEN_NO_UNDER}MATRIX MULTIPLICATION RUN TIME:${NC}`);
+br();
 logMinMax(benchmarks.run_time.mat_mult);
+br(2);
 
-console.log(``);
-
-console.log(`matrix convolution compile time: ${benchmarks.build_time.mat_conv.gpu}ms`);
-console.log(`matrix convolution (pipeline) compile time: ${benchmarks.build_time.mat_conv.pipe}ms`);
-
-console.log(``);
-
-console.log(`MATRIX CONVOLUTION RUN TIME:`);
-logMinMax(benchmarks.run_time.mat_conv)
+console.log(`${GREEN_NO_UNDER}MATRIX CONVOLUTION RUN TIME:${NC}`);
+br();
+logMinMax(benchmarks.run_time.mat_conv);
+br();

@@ -3,7 +3,8 @@ const benchIt = require('./util/bench-it'),
   getMinMaxAvg = require('./util/get-min-max'),
   matMult = require('./benches/matrix-multiplication'),
   matConv = require('./benches/convolution'),
-  { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution')
+  { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution'),
+  { YELLOW_UNDER, GREEN_NO_UNDER, NC } = require('./cli/colors');
 
 /**
  * @method run
@@ -52,7 +53,7 @@ const run = options => {
     benchmarks.mat_conv.pipe.push(benchIt(() => funcs.mat_conv.pipe(padded.ret, kernel).toArray()).time);
     benchmarks.mat_conv.cpu.push(benchIt(() => funcs.mat_conv.cpu(padded.ret, kernel)).time);
 
-    console.log(`Benchmark ${i} completed`);
+    console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed ✔️${NC}`);
   }
 
   const benches = {

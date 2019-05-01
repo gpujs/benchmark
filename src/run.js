@@ -47,11 +47,11 @@ const run = options => {
   for (let i = 1; i <= options.num_benchmarks; i++){
     benchmarks.mat_mult.gpu.push(benchIt(() => funcs.mat_mult.gpu(mat.ret[0], mat.ret[1])).time);
     benchmarks.mat_mult.pipe.push(benchIt(() => funcs.mat_mult.pipe(mat.ret[0], mat.ret[1]).toArray()).time);
-    benchmarks.mat_mult.cpu.push(benchIt(() => funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])).time);
+    if (options.cpu_benchmark) {benchmarks.mat_mult.cpu.push(benchIt(() => funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])).time)}
 
     benchmarks.mat_conv.gpu.push(benchIt(() => funcs.mat_conv.gpu(padded.ret, kernel)).time);
     benchmarks.mat_conv.pipe.push(benchIt(() => funcs.mat_conv.pipe(padded.ret, kernel).toArray()).time);
-    benchmarks.mat_conv.cpu.push(benchIt(() => funcs.mat_conv.cpu(padded.ret, kernel)).time);
+    if (options.cpu_benchmark) {benchmarks.mat_conv.cpu.push(benchIt(() => funcs.mat_conv.cpu(padded.ret, kernel)).time)}
 
     if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
   }
@@ -66,13 +66,13 @@ const run = options => {
       mat_mult: {
         gpu: getMinMaxAvg(benchmarks.mat_mult.gpu),
         pipe: getMinMaxAvg(benchmarks.mat_mult.pipe),
-        cpu: getMinMaxAvg(benchmarks.mat_mult.cpu)
+        cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_mult.cpu) : {min: -1, avg: -1, max: -1}
       },
 
       mat_conv: {
         gpu: getMinMaxAvg(benchmarks.mat_conv.gpu),
         pipe: getMinMaxAvg(benchmarks.mat_conv.pipe),
-        cpu: getMinMaxAvg(benchmarks.mat_conv.cpu)
+        cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_conv.cpu) : {min: -1, avg: -1, max: -1}
       }
     }
   }

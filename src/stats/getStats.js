@@ -1,5 +1,14 @@
 const getDiff = require('./diff');
 const formatDiff = (diff, contenders) => {
+  if (contenders.includes(-1)){
+    const loser = contenders.indexOf(-1);
+    contenders.splice(loser);
+
+    return {
+      percentage: diff.diff,
+      winner: contenders[0]
+    }
+  }
   return {
     percentage: diff.diff,
     winner: contenders[diff.greater]

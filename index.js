@@ -17,7 +17,7 @@ if (typeof process.argv[2] != 'undefined') {
 else {
   options = {};
 }
-
+options.logs = true;
 const benchmarks = bench(options);
 
 br();

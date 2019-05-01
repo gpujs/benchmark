@@ -13,10 +13,16 @@ const generateStatsObj = (run_time, build_time) => {
       cpu_pipe: {}
     },
     mat_mult = {
-      diff: diff_obj
+      diff: diff_obj,
+      best_performer: {},
+      worst_performer: {},
+      bigDiff: {}
     },
     mat_conv = {
-      diff: diff_obj
+      diff: diff_obj,
+      best_performer: {},
+      worst_performer: {},
+      bigDiff: {}
     };
 
   const stats = {
@@ -63,6 +69,25 @@ const generateStatsObj = (run_time, build_time) => {
 
     stats.build_time[bench].diff.gpu_pipe = diff;
   }
+
+  for (const bench in run_time) {
+    let better_avg = Infinity,
+      better_performer = '',
+      worse_avg = 0,
+      worse_performer = '';
+
+    for (const performer in run_time[bench]) {
+      if (better_avg > run_time[bench][performer].avg) better_performer = performer;
+      better_avg = Math.min(run_time[bench][performer].avg, better_avg);
+
+      if (worse_avg < run_time[bench][performer].avg) worse_performer = performer;
+      worse_avg = Math.max(run_time[bench][performer].avg, worse_avg);
+    }
+
+    stats.run_time[bench].best_performer = better_performer;
+    stats.run_time[bench].worst_performer = worse_performer;
+  }
+
 
   return stats;
 }

@@ -14,15 +14,13 @@ const generateStatsObj = (run_time, build_time) => {
     },
     mat_mult = {
       diff: diff_obj,
-      best_performer: {},
-      worst_performer: {},
-      bigDiff: {}
+      best_performer: '',
+      worst_performer: ''
     },
     mat_conv = {
       diff: diff_obj,
-      best_performer: {},
-      worst_performer: {},
-      bigDiff: {}
+      best_performer: '',
+      worst_performer: ''
     };
 
   const stats = {

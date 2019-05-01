@@ -53,7 +53,7 @@ const run = options => {
     benchmarks.mat_conv.pipe.push(benchIt(() => funcs.mat_conv.pipe(padded.ret, kernel).toArray()).time);
     benchmarks.mat_conv.cpu.push(benchIt(() => funcs.mat_conv.cpu(padded.ret, kernel)).time);
 
-    console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed ✔️${NC}`);
+    if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed ✔️${NC}`);
   }
 
   const benches = {

@@ -6,6 +6,7 @@ const benchmark = (options = {}) => {
 
   options.matrix_size = options.matrix_size || 512;
   options.output = [options.matrix_size, options.matrix_size];
+  options.logs = options.logs || true;
 
   options.gpu = options.gpu || new GPU();
   options.cpu = options.cpu || new GPU({mode: 'cpu'});

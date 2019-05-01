@@ -33,9 +33,16 @@ const generateStatsObj = (run_time, build_time) => {
       mat_conv: {diff: {gpu_pipe: {}}}
     },
     overall: {
-      best_performer: {},
-      worst_performer: {},
-      diff: {}
+      mat_mult: {
+        best_performer: {},
+        worst_performer: {},
+        diff: {}
+      },
+      mat_conv: {
+        best_performer: {},
+        worst_performer: {},
+        diff: {}
+      }
     }
   }
 
@@ -80,20 +87,46 @@ const generateStatsObj = (run_time, build_time) => {
       worse_performer = '';
 
     for (const performer in run_time[bench]) {
-      if (better_avg > run_time[bench][performer].avg && run_time[bench][performer].avg != -1)
+      if (better_avg > run_time[bench][performer].avg && run_time[bench][performer].avg != -1){
         better_performer = performer;
         better_avg = Math.min(run_time[bench][performer].avg, better_avg);
+      }
 
-      if (worse_avg < run_time[bench][performer].avg && run_time[bench][performer].avg != -1)
+      if (worse_avg < run_time[bench][performer].avg && run_time[bench][performer].avg != -1){
         worse_performer = performer;
         worse_avg = Math.max(run_time[bench][performer].avg, worse_avg);
+      }
     }
 
     stats.run_time[bench].best_performer = better_performer;
     stats.run_time[bench].worst_performer = worse_performer;
   }
 
+  for (const bench in stats.overall) {
+    let better_total = Infinity,
+      better_performer = '',
+      worse_total = 0,
+      worse_performer = '';
 
+    for (const performer in run_time[bench]){
+      const performer_build_time = performer == 'cpu' ? 0 : build_time[bench][performer],
+        performer_run_time = run_time[bench][performer].avg,
+        total_time = performer_build_time + performer_run_time;
+      if (total_time < better_total && run_time[bench][performer].avg != -1){
+        better_total = total_time;
+        better_performer = performer;
+      }
+        
+      if (total_time > worse_total && run_time[bench][performer].avg != -1){
+        worse_total = total_time;
+        worse_performer = performer;
+      }
+
+    }
+    stats.overall[bench].best_performer = better_performer;
+    stats.overall[bench].worst_performer = worse_performer;
+    stats.overall[bench].diff = formatDiff(getDiff(better_total, worse_total), [better_performer, worse_performer]);
+  }
   return stats;
 }
 

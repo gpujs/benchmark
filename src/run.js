@@ -4,7 +4,8 @@ const benchIt = require('./util/bench-it'),
   matMult = require('./benches/matrix-multiplication'),
   matConv = require('./benches/convolution'),
   { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution'),
-  { YELLOW_UNDER, GREEN_NO_UNDER, NC } = require('./cli/colors');
+  { YELLOW_UNDER, GREEN_NO_UNDER, NC } = require('./cli/colors'),
+  generateStats = require('./stats/getStats');
 
 /**
  * @method run
@@ -56,25 +57,31 @@ const run = options => {
     if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
   }
 
+  const run_time = {
+    mat_mult: {
+      gpu: getMinMaxAvg(benchmarks.mat_mult.gpu),
+      pipe: getMinMaxAvg(benchmarks.mat_mult.pipe),
+      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_mult.cpu) : {min: -1, avg: -1, max: -1}
+    },
+
+    mat_conv: {
+      gpu: getMinMaxAvg(benchmarks.mat_conv.gpu),
+      pipe: getMinMaxAvg(benchmarks.mat_conv.pipe),
+      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_conv.cpu) : {min: -1, avg: -1, max: -1}
+    }
+  }
+  
+  const stats = generateStats(run_time, build_time);
+
   const benches = {
     mat_gen: mat.time,
     mat_pad: padded.time,
 
     build_time,
 
-    run_time: {
-      mat_mult: {
-        gpu: getMinMaxAvg(benchmarks.mat_mult.gpu),
-        pipe: getMinMaxAvg(benchmarks.mat_mult.pipe),
-        cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_mult.cpu) : {min: -1, avg: -1, max: -1}
-      },
+    run_time,
 
-      mat_conv: {
-        gpu: getMinMaxAvg(benchmarks.mat_conv.gpu),
-        pipe: getMinMaxAvg(benchmarks.mat_conv.pipe),
-        cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_conv.cpu) : {min: -1, avg: -1, max: -1}
-      }
-    }
+    stats
   }
 
   return benches;

@@ -72,7 +72,7 @@ const run = options => {
   }
   
   const stats = generateStats(run_time, build_time);
-  
+
   const benches = {
     mat_gen: mat.time,
     mat_pad: padded.time,

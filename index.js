@@ -1,7 +1,8 @@
 const bench = require('./src/index'),
   logMinMax = require('./src/cli/log-min-max'),
   { GREEN_NO_UNDER, NC, RED_FLASH, YELLOW_UNDER } = require('./src/cli/colors'),
-  { br } = require('./src/cli/format');
+  { br } = require('./src/cli/format'),
+  { logRunTimeStats, logBuildTimeStats, logOverallStats } = require('./src/cli/log-stats');
 
 let options;
 br();
@@ -11,7 +12,7 @@ if (typeof process.argv[2] != 'undefined') {
     options = JSON.parse(process.argv[2].toString());
   }
   catch (e) {
-    console.log(`${RED_FLASH}Options argument is not a valid JSON string, running benchmarks without any options${NC}`);
+    console.log(`${RED_FLASH}Options argument is not a valid JSON string or contains errors, running benchmarks without any options${NC}`);
     br();
     options = {};
   }
@@ -47,3 +48,18 @@ console.log(`${GREEN_NO_UNDER}MATRIX CONVOLUTION RUN TIME:${NC}`);
 br();
 logMinMax(benchmarks.run_time.mat_conv);
 br();
+
+console.log(`${GREEN_NO_UNDER}STATISTICS:${NC}`);
+br();
+
+console.log(`${GREEN_NO_UNDER}Run Time Statistics:${NC}`);
+br();
+logRunTimeStats(benchmarks.stats);
+
+console.log(`${GREEN_NO_UNDER}Build Time Statistics:${NC}`);
+br();
+logBuildTimeStats(benchmarks.stats);
+
+console.log(`${GREEN_NO_UNDER}Overall Statistics:${NC}`);
+br();
+logOverallStats(benchmarks.stats);

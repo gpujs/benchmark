@@ -4,6 +4,7 @@ const bench = require('./src/index'),
   { br } = require('./src/cli/format');
 
 let options;
+br();
 
 if (typeof process.argv[2] != 'undefined') {
   try {
@@ -11,7 +12,8 @@ if (typeof process.argv[2] != 'undefined') {
   }
   catch (e) {
     console.log(`${RED_FLASH}Options argument is not a valid JSON string, running benchmarks without any options${NC}`);
-    setTimeout(() => options = {}, 5000);
+    br();
+    options = {};
   }
 }
 else {
@@ -19,7 +21,6 @@ else {
 }
 options.logs = true;
 
-br();
 const benchmarks = bench(options);
 
 br();

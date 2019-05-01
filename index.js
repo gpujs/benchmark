@@ -20,6 +20,7 @@ const benchmarks = bench(options);
 console.log(``);
 console.log(`matrix generation time: ${benchmarks.mat_gen}ms`);
 console.log(`matrix padding time: ${benchmarks.mat_pad}ms`);
+console.log(``);
 
 console.log(`matrix multiplication compile time: ${benchmarks.build_time.mat_mult.gpu}ms`);
 console.log(`matrix multiplication (pipeline) compile time: ${benchmarks.build_time.mat_mult.pipe}ms`);

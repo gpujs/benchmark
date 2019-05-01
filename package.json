@@ -7,11 +7,25 @@
   "scripts": {
     "start": "node ./index.js"
   },
-  "repository": "https://github.com/gpujs/benchmark.git",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gpujs/benchmark.git"
+  },
   "author": "gpujs",
   "license": "MIT",
   "dependencies": {
     "gpu.js": "2.0.0-rc.13",
     "performance-now": "^2.1.0"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/gpujs/benchmark/issues"
+  },
+  "homepage": "https://github.com/gpujs/benchmark#readme",
+  "devDependencies": {},
+  "keywords": [
+    "gpujs",
+    "gpu",
+    "gpu.js",
+    "benchmark"
+  ]
 }

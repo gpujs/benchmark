@@ -18,6 +18,8 @@ else {
   options = {};
 }
 options.logs = true;
+
+br();
 const benchmarks = bench(options);
 
 br();

@@ -1,7 +1,7 @@
 const { NC, YELLOW_UNDER, RED_NO_UNDER, GREEN_NO_UNDER, RED_UNDER } = require('./colors'),
   { br } = require('./format');
 
-const getVal = val => val == -1 ? `${YELLOW_UNDER}Not Benchmarked${NC}` : `${YELLOW_UNDER}val${NC} ms`
+const getVal = val => val == -1 ? `${YELLOW_UNDER}Not Benchmarked${NC}` : `${YELLOW_UNDER}${val}${NC} ms`
 
 module.exports = minMax => {
   console.log(`GPU minimum: ${getVal(minMax.gpu.min)}`);

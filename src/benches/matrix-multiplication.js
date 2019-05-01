@@ -1,6 +1,6 @@
 const matMultFunc = `function(a, b) {
   let sum = 0;
-  for (let i = 0; i < 512; i++) {
+  for (let i = 0; i < this.output.x; i++) {
     sum += a[this.thread.y][i] * b[i][this.thread.x];
   }
   return sum;

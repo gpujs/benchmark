@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node ./index.js",
-    "test": "tape test/util/*.js test/stats/*.js | tap-spec"
+    "test": "tape test/util/*.js test/stats/*.js test/benches/*.js | tap-spec"
   },
   "repository": {
     "type": "git",

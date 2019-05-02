@@ -142,6 +142,8 @@ The returned output is a JavaScript `Object` with the following structure.
 
 3. `stats`: An object which contains some statistics regarding the performances of different modes in different benchmarks. See [this](#stats)
 
+4. `options`: The original options Object. See [this](#options)
+
 ##### NOTE: If only a single benchmark is run, `min`, `max` and `avg` will have the same values
 
 ### Options

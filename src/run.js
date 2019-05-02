@@ -81,7 +81,9 @@ const run = options => {
 
     run_time,
 
-    stats
+    stats,
+
+    options
   }
 
   return benches;

@@ -15,7 +15,8 @@ const formatDiff = (diff, contenders) => {
 }
 
 const generateStatsObj = (run_time, build_time) => {
-  const mat_mult = {
+  const 
+    mat_mult = {
       diff: {
         cpu_gpu: {},
         gpu_pipe: {},
@@ -61,8 +62,8 @@ const generateStatsObj = (run_time, build_time) => {
     for (const diffName in stats.run_time[bench].diff){
       const contenders = diffName.split('_');
       const rawDiffs = {
-        avg: {},
         min: {},
+        avg: {},
         max: {}
       }
 

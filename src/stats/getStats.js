@@ -63,8 +63,8 @@ const generateStatsObj = (run_time, build_time) => {
       const contenders = diffName.split('_');
       const rawDiffs = {
         min: {},
-        avg: {},
-        max: {}
+        max: {},
+        avg: {}
       }
 
       for (const rawDiff in  rawDiffs) {
@@ -77,8 +77,8 @@ const generateStatsObj = (run_time, build_time) => {
 
       const diff = {
         min: formatDiff(rawDiffs.min, contenders),
-        avg: formatDiff(rawDiffs.avg, contenders),
-        max: formatDiff(rawDiffs.max, contenders)
+        max: formatDiff(rawDiffs.max, contenders),
+        avg: formatDiff(rawDiffs.avg, contenders)
       }
 
       stats.run_time[bench].diff[diffName] = diff;

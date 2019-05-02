@@ -5,7 +5,7 @@ const formatDiff = (diff, contenders) => {
     contenders.splice(loser);
 
     return {
-      percentage: -,
+      percentage: -1,
       winner: contenders[0]
     }
   }

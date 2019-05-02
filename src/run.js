@@ -5,7 +5,7 @@ const benchIt = require('./util/bench-it'),
   matConv = require('./benches/convolution'),
   { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution'),
   { YELLOW_UNDER, GREEN_NO_UNDER, NC } = require('./cli/colors'),
-  generateStats = require('./stats/getStats');
+  { generateStatsObj: generateStats } = require('./stats/getStats');
 
 /**
  * @method run

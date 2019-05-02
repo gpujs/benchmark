@@ -15,18 +15,21 @@ const formatDiff = (diff, contenders) => {
 }
 
 const generateStatsObj = (run_time, build_time) => {
-  const diff_obj = {
-      cpu_gpu: {},
-      gpu_pipe: {},
-      cpu_pipe: {}
-    },
-    mat_mult = {
-      diff: diff_obj,
+  const mat_mult = {
+      diff: {
+        cpu_gpu: {},
+        gpu_pipe: {},
+        cpu_pipe: {}
+      },
       best_performer: '',
       worst_performer: ''
     },
     mat_conv = {
-      diff: diff_obj,
+      diff: {
+        cpu_gpu: {},
+        gpu_pipe: {},
+        cpu_pipe: {}
+      },
       best_performer: '',
       worst_performer: ''
     };

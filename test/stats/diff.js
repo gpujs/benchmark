@@ -4,9 +4,9 @@ const test = require('tape'),
 test('getDiff stats function test', t => {
   const vals = [100, 200],
     expected = {
-      percentage: 100,
-      greater: 1
-    }
+      diff: 50,
+      greater: 0
+    };
 
   const diff = getDiff(vals[0], vals[1]);
 

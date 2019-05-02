@@ -266,3 +266,6 @@ Options are optional parameters as a JavaScript `Object`.
 - `diff` (Object): An Object containing percentage difference in overall performance between the best and the worst performer.
 - `percentage` (Number): Percentage difference in overall the performance between the best and the worst performer.
 - `winner` (String): The best performer.
+
+### Publishing
+Publishing to npm should be done using `npm publish --access public`

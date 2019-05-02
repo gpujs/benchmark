@@ -1,8 +1,7 @@
 const getDiff = require('./diff');
 const formatDiff = (diff, contenders) => {
-  if (contenders.includes(-1)){
-    const loser = contenders.indexOf(-1);
-    contenders.splice(loser);
+  if (diff.diff >= 100){
+    contenders.splice(diff.greater, diff.greater + 1);
 
     return {
       percentage: -1,
@@ -12,7 +11,7 @@ const formatDiff = (diff, contenders) => {
   return {
     percentage: diff.diff,
     winner: contenders[diff.greater]
-  }        
+  }
 }
 
 const generateStatsObj = (run_time, build_time) => {

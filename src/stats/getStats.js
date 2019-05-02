@@ -76,8 +76,8 @@ const generateStatsObj = (run_time, build_time) => {
       }
 
       const diff = {
-        avg: formatDiff(rawDiffs.avg, contenders),
         min: formatDiff(rawDiffs.min, contenders),
+        avg: formatDiff(rawDiffs.avg, contenders),
         max: formatDiff(rawDiffs.max, contenders)
       }
 

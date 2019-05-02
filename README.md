@@ -151,7 +151,7 @@ Options are optional parameters as a JavaScript `Object`.
 #### Properties
 1. `num_benchmarks`(Number): Number of times to run a benchmark. The output values will be `min`, `max` and `avg` of all the benchmarks. (default: `1`)
 2. `matrix_size`(Number): Size of the benchmark matrix which is uniform i.e. equal number of comlumns and rows. (default: `512`)
-3. `logs`(Boolean): Toggle non-CLI console logs. (default: `true`) 
+3. `logs`(Boolean): Toggle non-CLI console logs. (default: `true`)
 4. `cpu_benchmark`(Boolean): Toggle CPU benchmarks. The `min`, `max` and `avg` values are set to `-1` if this option is set to `false`. (default: `true`) 
 5. `cpu`(Object): An optional custom `GPU` object with `{mode: 'cpu'}`(To use a specific version).
 6. `gpu`(Object): An optional custom `GPU` object (To use a specific version but version has to be >= 2.0.0)

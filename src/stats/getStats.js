@@ -5,7 +5,7 @@ const formatDiff = (diff, contenders) => {
     contenders.splice(loser);
 
     return {
-      percentage: diff.diff,
+      percentage: -,
       winner: contenders[0]
     }
   }
@@ -139,4 +139,7 @@ const generateStatsObj = (run_time, build_time) => {
   return stats;
 }
 
-module.exports = generateStatsObj;
+module.exports = {
+  generateStatsObj,
+  formatDiff,
+}

@@ -1,6 +1,11 @@
 const { GPU } = require('gpu.js'),
   run = require('./run');
 
+/**
+ * @method benchmark
+ * @description benchmarks gpu.js
+ * @param {"Object"} options Optional options
+ */
 const benchmark = (options = {}) => {
   options.num_benchmarks = options.num_benchmarks || 1;
 

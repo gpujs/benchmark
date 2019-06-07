@@ -1,6 +1,6 @@
 {
   "name": "@gpujs/benchmark",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": false,
   "description": "A benchmarking tool for gpu.js",
   "main": "src/index.js",
@@ -15,7 +15,7 @@
   "author": "gpujs",
   "license": "MIT",
   "dependencies": {
-    "gpu.js": "2.0.0-rc.13",
+    "gpu.js": "2.0.0-rc.14",
     "performance-now": "^2.1.0"
   },
   "bugs": {

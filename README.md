@@ -118,7 +118,14 @@ The returned output is a JavaScript `Object` with the following structure.
     mat_conv: <Object> // same as mat_mult
   },
 
-  stats: <Object>
+  stats: <Object>,
+
+  score: {
+    gpu: <Number>,
+    cpu: <Number>
+  },
+
+  options: <Object>
 }
 ```
 - `mat_gen`: The matrix generation time in `ms` accurate upto 2 decimal places.
@@ -142,7 +149,9 @@ The returned output is a JavaScript `Object` with the following structure.
 
 3. `stats`: An object which contains some statistics regarding the performances of different modes in different benchmarks. See [this](#stats)
 
-4. `options`: The original options Object. See [this](#options)
+4. `score`: The score for the CPU and GPU calculated depending upon the matrix size and time taken.
+
+5. `options`: The original options Object. See [this](#options)
 
 ##### NOTE: If only a single benchmark is run, `min`, `max` and `avg` will have the same values
 

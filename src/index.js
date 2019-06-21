@@ -1,5 +1,6 @@
 const { GPU } = require('gpu.js'),
-  run = require('./run');
+  run = require('./run'),
+  getScore = require('./stats/getScore');
 
 /**
  * @method benchmark
@@ -18,7 +19,11 @@ const benchmark = (options = {}) => {
   options.gpu = options.gpu || new GPU();
   options.cpu = options.cpu || new GPU({mode: 'cpu'});
 
-  return run(options);
+  const out = run(options);
+
+  out.score = getScore(out, options.matrix_size);
+
+  return out;
 }
 
 module.exports = benchmark;

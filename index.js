@@ -2,7 +2,8 @@ const bench = require('./src/index'),
   logMinMax = require('./src/cli/log-min-max'),
   { GREEN_NO_UNDER, NC, RED_FLASH, YELLOW_UNDER, YELLOW_NO_UNDER } = require('./src/cli/colors'),
   { br } = require('./src/cli/format'),
-  { logRunTimeStats, logBuildTimeStats, logOverallStats } = require('./src/cli/log-stats');
+  { logRunTimeStats, logBuildTimeStats, logOverallStats } = require('./src/cli/log-stats'),
+  getScore = require('./src/stats/getScore');
 
 let options;
 br();
@@ -66,3 +67,8 @@ logBuildTimeStats(benchmarks.stats);
 console.log(`${GREEN_NO_UNDER}Overall Statistics:${NC}`);
 br();
 logOverallStats(benchmarks.stats);
+
+console.log(`${GREEN_NO_UNDER}Score:${NC}`);
+br();
+console.log(`GPU: ${YELLOW_UNDER}${benchmarks.score.gpu}${NC}`);
+console.log(`CPU: ${YELLOW_UNDER}${benchmarks.score.cpu}${NC}`);

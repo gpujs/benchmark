@@ -25,6 +25,7 @@ npm install --save-dev @gpujs/benchmark
 
 ### Browser Usage
 #### Building
+**NOTE**: The dist files are also included in the npm module and GitHub repository, skip this step if you are not running a modified script locally.
 We use browserify and minify to build the distributable files `dist/benchmark.js` and `dist/benchmark.min.js`.
 After running the setup script, run the following command
 ```sh
@@ -67,7 +68,7 @@ cd benchmark
 ```
 
 2. Install `yarn`
-We use [yarn](https://yarnpkg.com/en/) as our package manager. You will have to install that too, as a side effect.(If you have yarn installed, skip this step)
+We use [yarn](https://yarnpkg.com/en/) as our package manager. You will have to install that too, as a side effect. (If you have yarn installed, skip this step)
 ```sh
 npm install -g yarn
 ```
@@ -162,9 +163,9 @@ The returned output is a JavaScript `Object` with the following structure.
 - `gpu`: Run times for the GPU benchmark.
 - `pipe`: Run times for the GPU with pipeline mode benchmark.
 - `cpu`: Run times for the CPU benchmark.
-- `min`: Minimum benchmark time in `ms` accurate upto 2 decimal places.(If multiple benchmarks are run)
-- `max`: Maximum benchmark time in `ms` accurate upto 2 decimal places.(If multiple benchmarks are run)
-- `avg`: Average benchmark time in `ms` accurate upto 2 decimal places.(If multiple benchmarks are run)
+- `min`: Minimum benchmark time in `ms` accurate up to 2 decimal places. (If multiple benchmarks are run)
+- `max`: Maximum benchmark time in `ms` accurate up to 2 decimal places. (If multiple benchmarks are run)
+- `avg`: Average benchmark time in `ms` accurate up to 2 decimal places. (If multiple benchmarks are run)
 
 3. `stats`: An object which contains some statistics regarding the performances of different modes in different benchmarks. See [this](#stats)
 
@@ -280,7 +281,7 @@ Options are optional parameters as a JavaScript `Object`.
 - `percentage` (Number): Percentage difference in the performance.
 - `winner` (String): The best performer.
 - `best_performer` (String): The best run time performer (considering the `avg` values).
-- `worst_performer` (String): The worst run time  performer (considering the `avg` values).
+- `worst_performer` (String): The worst run time performer (considering the `avg` values).
 
 2. `build_time` (Object): An Object containing all the build time statistics.
 - `mat_mult` (Object): An Object containing all the statistics for the matrix multiplication benchmark.
@@ -292,7 +293,7 @@ Options are optional parameters as a JavaScript `Object`.
 
 3. `overall` (Object): An Object containing all the overall performance statistics i.e. build time and run time performance statistics (considering the `avg` values).
 - `best_performer` (String): The best overall performer.
-- `worst_performer` (String): The worst overall  performer.
+- `worst_performer` (String): The worst overall performer.
 - `diff` (Object): An Object containing percentage difference in overall performance between the best and the worst performer.
 - `percentage` (Number): Percentage difference in overall the performance between the best and the worst performer.
 - `winner` (String): The best performer.

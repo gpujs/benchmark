@@ -24,10 +24,21 @@ npm install --save-dev @gpujs/benchmark
 ```
 
 ### Browser Usage
+#### Building
 We use browserify and minify to build the distributable files `dist/benchmark.js` and `dist/benchmark.min.js`.
 After running the setup script, run the following command
 ```sh
 yarn build
+```
+
+#### Using
+Include the benchmark dist file in the HTML file.
+```html
+<script src="path/to/dist/benchmark.min.js"></script>
+```
+The function can be referred to in JS as `benchmark`
+```js
+const out = benchmark(options);
 ```
 
 ### Usage

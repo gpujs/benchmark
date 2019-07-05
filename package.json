@@ -9,7 +9,7 @@
     "setup": "yarn install",
     "test": "TEST=true tape test/util/*.js test/stats/*.js test/benches/*.js test/index.js test/run.js | tap-spec",
     "build": "node ./build.js",
-    "publish": "yarn test; yarn build; yarn publish"
+    "npm-publish": "yarn test; yarn build; yarn publish"
   },
   "repository": {
     "type": "git",

@@ -37,6 +37,10 @@ Include the benchmark dist file in the HTML file.
 ```html
 <script src="path/to/dist/benchmark.min.js"></script>
 ```
+or, from the npm module
+```html
+<script src="path/to/node_modules/@gpujs/benchmark/dist/benchmark.min.js"></script>
+```
 The function can be referred to in JS as `benchmark`
 ```js
 const out = benchmark(options);

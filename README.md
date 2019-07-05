@@ -74,7 +74,7 @@ npm install -g yarn
 
 3. Install the dependencies
 ```sh
-yarn install
+yarn setup
 ```
 
 4. Run the tool in the CLI

@@ -6,6 +6,7 @@ This tool runs two benchmarks:
 
 ### Table of Contents
 - [Installation](#installation)
+- [Browser Usage](#browser-usage)
 - [Usage](#usage)
 - [Output](#output)
 - [Options](#options)
@@ -20,6 +21,13 @@ yarn add --dev @gpujs/benchmark
 #### Using npm
 ```sh
 npm install --save-dev @gpujs/benchmark
+```
+
+### Browser Usage
+We use browserify and minify to build the distributable files `dist/benchmark.js` and `dist/benchmark.min.js`.
+After running the setup script, run the following command
+```sh
+yarn build
 ```
 
 ### Usage

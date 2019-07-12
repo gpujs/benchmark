@@ -112,6 +112,8 @@ const generateStatsObj = (run_time, build_time) => {
         worse_performer = performer;
         worse_avg = Math.max(run_time[bench][performer].avg, worse_avg);
       }
+
+      if (run_time[bench][performer].avg == -1) better_avg = -1;
     }
 
     stats.run_time[bench].best_performer = better_performer;
@@ -123,7 +125,7 @@ const generateStatsObj = (run_time, build_time) => {
       better_performer = '',
       worse_total = 0,
       worse_performer = '';
-
+      let performerNotBenched;
     for (const performer in run_time[bench]){
       const performer_build_time = performer == 'cpu' ? 0 : build_time[bench][performer],
         performer_run_time = run_time[bench][performer].avg,
@@ -132,6 +134,8 @@ const generateStatsObj = (run_time, build_time) => {
         better_total = total_time;
         better_performer = performer;
       }
+
+      performerNotBenched = (performerNotBenched || run_time[bench][performer].avg == -1);
         
       if (total_time > worse_total && run_time[bench][performer].avg != -1){
         worse_total = total_time;
@@ -139,6 +143,9 @@ const generateStatsObj = (run_time, build_time) => {
       }
 
     }
+
+    if (performerNotBenched) worse_total = -1;
+
     stats.overall[bench].best_performer = better_performer;
     stats.overall[bench].worst_performer = worse_performer;
     stats.overall[bench].diff = formatDiff(getDiff(better_total, worse_total), [better_performer, worse_performer]);

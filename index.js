@@ -75,4 +75,4 @@ logOverallStats(benchmarks.stats);
 console.log(`${GREEN_NO_UNDER}Score:${NC}`);
 br();
 console.log(`GPU: ${YELLOW_UNDER}${benchmarks.score.gpu}${NC}`);
-console.log(`CPU: ${YELLOW_UNDER}${benchmarks.score.cpu}${NC}`);
+console.log(`CPU: ${YELLOW_UNDER}${benchmarks.score.cpu < 0 ? 'Not Benchmarked' : benchmarks.score.cpu}${NC}`);

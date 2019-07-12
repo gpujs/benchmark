@@ -11,6 +11,7 @@ This tool runs two benchmarks:
 - [Output](#output)
 - [Options](#options)
 - [Stats](#stats)
+- [Benchmarks](#benchmarks)
 
 ### Installation
 We recommend you to install **Benchmark** as a development dependency.
@@ -40,7 +41,6 @@ Include the benchmark dist file in the HTML file.
 or, from the npm module
 ```html
 <script src="path/to/node_modules/@gpujs/benchmark/dist/benchmark.min.js"></script>
-```
 The function can be referred to in JS as `benchmark`
 ```js
 const out = benchmark(options);
@@ -128,18 +128,14 @@ The returned output is a JavaScript `Object` with the following structure.
         max: <Number>,
         avg: <Number>
       },
-      pipe: {
-        min: <Number>,
-        max: <Number>,
-        avg: <Number>
-      },
       cpu: {
         min: <Number>,
         max: <Number>,
         avg: <Number>
       }
     },
-    mat_conv: <Object> // same as mat_mult
+    mat_conv: <Object>, // same as mat_mult
+    pipe: <Object> // same as mat_mult
   },
 
   stats: <Object>,
@@ -162,10 +158,10 @@ The returned output is a JavaScript `Object` with the following structure.
 - `pipe`: Compilation time of the GPU kernel with pipeline mode.
 
 2. `run_time`: Run times of each of the benchmarks.
-- `mat_mult`: Run times for matrix multiplication benchmark.
-- `mat_conv`: Run times for matrix convolution benchmark.
+- `mat_mult`: Run times for [matrix multiplication benchmark](#matrix-multiplication).
+- `mat_conv`: Run times for [matrix convolution benchmark](#matrix-convolution).
+- `pipe`: Run times for the [pipelining benchmark](#pipelining).
 - `gpu`: Run times for the GPU benchmark.
-- `pipe`: Run times for the GPU with pipeline mode benchmark.
 - `cpu`: Run times for the CPU benchmark.
 - `min`: Minimum benchmark time in `ms` accurate up to 2 decimal places. (If multiple benchmarks are run)
 - `max`: Maximum benchmark time in `ms` accurate up to 2 decimal places. (If multiple benchmarks are run)
@@ -209,40 +205,13 @@ Options are optional parameters as a JavaScript `Object`.
             percentage: <Number>,
             winner: <String>
           }
-        },
-        gpu_pipe: {
-          avg: {
-            percentage: <Number>,
-            winner: <String>
-          },
-          min: {
-            percentage: <Number>,
-            winner: <String>
-          },
-          max: {
-            percentage: <Number>,
-            winner: <String>
-          }
-        },
-        cpu_pipe: {
-          avg: {
-            percentage: <Number>,
-            winner: <String>
-          },
-          min: {
-            percentage: <Number>,
-            winner: <String>
-          },
-          max: {
-            percentage: <Number>,
-            winner: <String>
-          }
         }
       },
       best_performer: <String>,
       worst_performer: <String>
     },
-    mat_conv: <Object> // same as mat_mult
+    mat_conv: <Object>, // same as mat_mult
+    pipe: <Object> // same as mat_mult
   },
   
   build_time: {
@@ -277,8 +246,6 @@ Options are optional parameters as a JavaScript `Object`.
 - `mat_conv` (Object): An Object containing all the statistics for the matrix convolution benchmark.
 - `diff` (Object): An Object containing percentage difference in run time performance.
 - `gpu_cpu` (Object): Performance comparison between the GPU and the CPU.
-- `gpu_pipe` (Object): Performance comparison between GPU and the GPU (with pipeline mode).
-- `cpu_pipe` (Object): Performance comparison between CPU and the GPU (ith pipeline mode).
 - `min` (Object): Performance comparison between the `min` values.
 - `max` (Object): Performance comparison between the `max` values.
 - `avg` (Object): Performance comparison between the `avg` values.
@@ -288,10 +255,10 @@ Options are optional parameters as a JavaScript `Object`.
 - `worst_performer` (String): The worst run time performer (considering the `avg` values).
 
 2. `build_time` (Object): An Object containing all the build time statistics.
-- `mat_mult` (Object): An Object containing all the statistics for the matrix multiplication benchmark.
-- `mat_conv` (Object): An Object containing all the statistics for the matrix convolution benchmark.
+- `mat_mult` (Object): An Object containing all the statistics for the [matrix multiplication](#matrix-multiplication) benchmark.
+- `mat_conv` (Object): An Object containing all the statistics for the [matrix convolution](#matrix-convolution) benchmark.
+- `pipe` (Object): An Object containing all the statistics for the [pipelining](#pipelining) benchmark.
 - `diff` (Object): An Object containing percentage difference in compilation performance.
-- `gpu_pipe` (Object): Compilation performance comparison between GPU and the GPU (with pipeline mode).
 - `percentage` (Object): Percentage difference in the build time performance.
 - `winner` (Object): The best performer.
 
@@ -302,5 +269,19 @@ Options are optional parameters as a JavaScript `Object`.
 - `percentage` (Number): Percentage difference in overall the performance between the best and the worst performer.
 - `winner` (String): The best performer.
 
-### Publishing
-Publishing to npm should be done using `npm publish --access public`
+### Benchmarks
+#### Matrix Multiplication
+[Multiplies 2 matrices](https://en.wikipedia.org/wiki/Matrix_multiplication) of a given size and returns the time taken.
+
+#### Matrix Convolution
+[Convolves](https://en.wikipedia.org/wiki/Kernel_(image_processing)) a 3x3 kernel over the main matrix of a given size.
+The kernel is
+```
+1 2 1
+2 1 2
+1 2 1
+```
+
+#### Pipelining
+This benchmark benchmarks the [pipelining](https://github.com/gpujs/gpu.js/blob/develop/README.md#pipelining) feature of GPU.js.
+It multiplies 5 matrices in sequence while the outputs are pipelined.

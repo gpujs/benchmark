@@ -18,18 +18,21 @@ const generateStatsObj = (run_time, build_time) => {
   const 
     mat_mult = {
       diff: {
-        cpu_gpu: {},
-        gpu_pipe: {},
-        cpu_pipe: {}
+        cpu_gpu: {}
       },
       best_performer: '',
       worst_performer: ''
     },
     mat_conv = {
       diff: {
-        cpu_gpu: {},
-        gpu_pipe: {},
-        cpu_pipe: {}
+        cpu_gpu: {}
+      },
+      best_performer: '',
+      worst_performer: ''
+    },
+    pipe = {
+      diff: {
+        cpu_gpu: {}
       },
       best_performer: '',
       worst_performer: ''
@@ -38,11 +41,11 @@ const generateStatsObj = (run_time, build_time) => {
   const stats = {
     run_time: {
       mat_mult,
-      mat_conv
+      mat_conv,
+      pipe
     },
     build_time: {
-      mat_mult: {diff: {gpu_pipe: {}}},
-      mat_conv: {diff: {gpu_pipe: {}}}
+      mat_mult: {diff: {gpu_pipe: {}}}
     },
     overall: {
       mat_mult: {

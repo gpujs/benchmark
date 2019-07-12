@@ -8,10 +8,6 @@ module.exports = minMax => {
   console.log(`GPU maximum: ${getVal(minMax.gpu.max)}`);
   console.log(`GPU average: ${getVal(minMax.gpu.avg)}`);
   br();
-  console.log(`GPU(pipeline) minimum: ${getVal(minMax.pipe.min)}`)
-  console.log(`GPU(pipeline) maximum: ${getVal(minMax.pipe.max)}`)
-  console.log(`GPU(pipeline) average: ${getVal(minMax.pipe.avg)}`)
-  br();
   console.log(`CPU minimum: ${getVal(minMax.cpu.min)}`)
   console.log(`CPU maximum: ${getVal(minMax.cpu.max)}`)
   console.log(`CPU average: ${getVal(minMax.cpu.avg)}`)

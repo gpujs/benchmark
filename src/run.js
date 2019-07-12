@@ -5,7 +5,8 @@ const benchIt = require('./util/bench-it'),
   matConv = require('./benches/convolution'),
   { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution'),
   { YELLOW_UNDER, GREEN_NO_UNDER, NC } = require('./cli/colors'),
-  { generateStatsObj: generateStats } = require('./stats/getStats');
+  { generateStatsObj: generateStats } = require('./stats/getStats'),
+  getgetTextureKernel = require('./util/get-texture');
 
 /**
  * @method run
@@ -13,8 +14,13 @@ const benchIt = require('./util/bench-it'),
  * @return {"Object"}
  */
 const run = options => {
+  
+  const getTexture = getgetTextureKernel(options.gpu, options.matrix_size, options.matrix_size);
+
   const mat = benchIt(() => generateMatrices(options.matrix_size)),
     padded = benchIt(() => paddificate(mat.ret[0], paddingX, paddingY));
+  
+  getTexture.build(mat.ret[0]);
 
   const funcs = {
     mat_mult: matMult.generateFuncs(options.gpu, options.cpu, options.output),
@@ -24,12 +30,14 @@ const run = options => {
   const benchmarks = {
     mat_mult: {
       gpu: [],
-      pipe: [],
       cpu: []
     },
     mat_conv: {
       gpu: [],
-      pipe: [],
+      cpu: []
+    },
+    pipe: {
+      gpu: [],
       cpu: []
     }
   }
@@ -47,27 +55,48 @@ const run = options => {
 
   for (let i = 1; i <= options.num_benchmarks; i++){
     benchmarks.mat_mult.gpu.push(benchIt(() => funcs.mat_mult.gpu(mat.ret[0], mat.ret[1])).time);
-    benchmarks.mat_mult.pipe.push(benchIt(() => funcs.mat_mult.pipe(mat.ret[0], mat.ret[1]).toArray()).time);
     if (options.cpu_benchmark) {benchmarks.mat_mult.cpu.push(benchIt(() => funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])).time)}
 
     benchmarks.mat_conv.gpu.push(benchIt(() => funcs.mat_conv.gpu(padded.ret, kernel)).time);
-    benchmarks.mat_conv.pipe.push(benchIt(() => funcs.mat_conv.pipe(padded.ret, kernel).toArray()).time);
     if (options.cpu_benchmark) {benchmarks.mat_conv.cpu.push(benchIt(() => funcs.mat_conv.cpu(padded.ret, kernel)).time)}
+    
+    const matrixTexs = mat.ret.map(arr => getTexture(arr));
 
+    benchmarks.pipe.gpu.push(
+      benchIt(() => {
+        const func = funcs.mat_mult.pipe;
+
+        func(func(func(func(matrixTexs[0], matrixTexs[1]), matrixTexs[2]), matrixTexs[3]), matrixTexs[4]).toArray();
+      }).time
+    )
+
+    if (options.cpu_benchmark) {
+      benchmarks.pipe.cpu.push(
+        benchIt(() => {
+          const func = funcs.mat_mult.cpu;
+
+          func(func(func(func(mat.ret[0], mat.ret[1]), mat.ret[2]), mat.ret[3]), mat.ret[4]);
+        }).time
+      )
+    }
+    
     if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
   }
 
   const run_time = {
     mat_mult: {
       gpu: getMinMaxAvg(benchmarks.mat_mult.gpu),
-      pipe: getMinMaxAvg(benchmarks.mat_mult.pipe),
       cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_mult.cpu) : {min: -1, avg: -1, max: -1}
     },
 
     mat_conv: {
       gpu: getMinMaxAvg(benchmarks.mat_conv.gpu),
-      pipe: getMinMaxAvg(benchmarks.mat_conv.pipe),
       cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_conv.cpu) : {min: -1, avg: -1, max: -1}
+    },
+
+    pipe: {
+      gpu: getMinMaxAvg(benchmarks.pipe.gpu),
+      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.pipe.cpu) : {min: -1, avg: -1, max: -1}
     }
   }
   

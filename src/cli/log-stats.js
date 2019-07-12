@@ -3,12 +3,12 @@ const { NC, YELLOW_NO_UNDER, YELLOW_UNDER, GREEN_UNDER, GREEN_NO_UNDER, RED_NO_U
 
 const performerMap = {
   gpu: 'GPU',
-  cpu: 'CPU',
-  pipe: 'GPU(pipeline)'
+  cpu: 'CPU'
 },
 benchMap = {
   mat_mult: 'Matrix Multiplication',
-  mat_conv: 'Matrix Convolution'
+  mat_conv: 'Matrix Convolution',
+  pipe: 'Pipelining'
 }
 
 const logRunTimeStats = ({run_time}) => {

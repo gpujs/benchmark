@@ -440,85 +440,269 @@ function createContext (width, height, options) {
 module.exports = createContext
 
 },{}],3:[function(require,module,exports){
-'use strict';
+function setupArguments(args) {
+  const newArguments = new Array(args.length);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.toArray) {
+      newArguments[i] = arg.toArray();
+    } else {
+      newArguments[i] = arg;
+    }
+  }
+  return newArguments;
+}
 
 function mock1D() {
-  const row = [];
+  const args = setupArguments(arguments);
+  const row = new Float32Array(this.output.x);
   for (let x = 0; x < this.output.x; x++) {
     this.thread.x = x;
     this.thread.y = 0;
     this.thread.z = 0;
-    row.push(this._fn.apply(this, arguments));
+    row[x] = this._fn.apply(this, args);
   }
   return row;
 }
 
 function mock2D() {
-  const matrix = [];
+  const args = setupArguments(arguments);
+  const matrix = new Array(this.output.y);
   for (let y = 0; y < this.output.y; y++) {
-    const row = [];
+    const row = new Float32Array(this.output.x);
     for (let x = 0; x < this.output.x; x++) {
       this.thread.x = x;
       this.thread.y = y;
       this.thread.z = 0;
-      row.push(this._fn.apply(this, arguments));
+      row[x] = this._fn.apply(this, args);
     }
-    matrix.push(row);
+    matrix[y] = row;
   }
   return matrix;
 }
 
+function mock2DGraphical() {
+  const args = setupArguments(arguments);
+  for (let y = 0; y < this.output.y; y++) {
+    for (let x = 0; x < this.output.x; x++) {
+      this.thread.x = x;
+      this.thread.y = y;
+      this.thread.z = 0;
+      this._fn.apply(this, args);
+    }
+  }
+}
+
 function mock3D() {
-  const cube = [];
+  const args = setupArguments(arguments);
+  const cube = new Array(this.output.z);
   for (let z = 0; z < this.output.z; z++) {
-    const matrix = [];
+    const matrix = new Array(this.output.y);
     for (let y = 0; y < this.output.y; y++) {
-      const row = [];
+      const row = new Float32Array(this.output.x);
       for (let x = 0; x < this.output.x; x++) {
         this.thread.x = x;
         this.thread.y = y;
         this.thread.z = z;
-        row.push(this._fn.apply(this, arguments));
+        row[x] = this._fn.apply(this, args);
       }
-      matrix.push(row);
+      matrix[y] = row;
     }
-    cube.push(matrix);
+    cube[z] = matrix;
   }
   return cube;
 }
 
-module.exports = function gpuMock(fn, options) {
-  let contextOutput = null;
-  if (options.output.length) {
-    if (options.output.length === 3) {
-      contextOutput = { x: options.output[0], y: options.output[1], z: options.output[2] };
-    } else if (options.output.length === 2) {
-      contextOutput = { x: options.output[0], y: options.output[1] };
-    } else {
-      contextOutput = { x: options.output[0] };
-    }
-  } else {
-    contextOutput = options.output;
-  }
-
-  const context = {
-    _fn: fn,
-    constants: options.constants,
-    output: contextOutput,
-    thread: {
-      x: 0,
-      y: 0,
-      z: 0
+function apiDecorate(kernel) {
+  kernel.setOutput = (output) => {
+    kernel.output = setupOutput(output);
+    if (kernel.graphical) {
+      setupGraphical(kernel);
     }
   };
+  kernel.toJSON = () => {
+    throw new Error('Not usable with gpuMock');
+  };
+  kernel.setConstants = (flag) => {
+    kernel.constants = flag;
+    return kernel;
+  };
+  kernel.setGraphical = (flag) => {
+    kernel.graphical = flag;
+    return kernel;
+  };
+  kernel.setCanvas = (flag) => {
+    kernel.canvas = flag;
+    return kernel;
+  };
+  kernel.setContext = (flag) => {
+    kernel.context = flag;
+    return kernel;
+  };
+  kernel.exec = function() {
+    return new Promise((resolve, reject) => {
+      try {
+        resolve(kernel.apply(kernel, arguments));
+      } catch(e) {
+        reject(e);
+      }
+    });
+  };
+  kernel.getPixels = (flip) => {
+    const {x, y} = kernel.output;
+    // cpu is not flipped by default
+    return flip ? flipPixels(kernel._imageData.data, x, y) : kernel._imageData.data.slice(0);
+  };
+  kernel.color = function(r, g, b, a) {
+    if (typeof a === 'undefined') {
+      a = 1;
+    }
 
-  if (contextOutput.z) {
-    return mock3D.bind(context);
-  } else if (contextOutput.y) {
-    return mock2D.bind(context);
-  } else {
-    return mock1D.bind(context);
+    r = Math.floor(r * 255);
+    g = Math.floor(g * 255);
+    b = Math.floor(b * 255);
+    a = Math.floor(a * 255);
+
+    const width = kernel.output.x;
+    const height = kernel.output.y;
+
+    const x = kernel.thread.x;
+    const y = height - kernel.thread.y - 1;
+
+    const index = x + y * width;
+
+    kernel._colorData[index * 4 + 0] = r;
+    kernel._colorData[index * 4 + 1] = g;
+    kernel._colorData[index * 4 + 2] = b;
+    kernel._colorData[index * 4 + 3] = a;
+  };
+
+  // these are added for api compatibility, but have no affect
+  kernel.setWarnVarUsage = () => {
+    return kernel;
+  };
+  kernel.setOptimizeFloatMemory = () => {
+    return kernel;
+  };
+  kernel.setArgumentTypes = () => {
+    return kernel;
+  };
+  kernel.setDebug = () => {
+    return kernel;
+  };
+  kernel.setLoopMaxIterations = () => {
+    return kernel;
+  };
+  kernel.setPipeline = () => {
+    return kernel;
+  };
+  kernel.setPrecision = () => {
+    return kernel;
+  };
+  kernel.setImmutable = () => {
+    return kernel;
+  };
+  kernel.setFunctions = () => {
+    return kernel;
+  };
+  kernel.addSubKernel = () => {
+    return kernel;
+  };
+  kernel.destroy = () => {};
+  kernel.validateSettings = () => {};
+  if (kernel.graphical && kernel.output) {
+    setupGraphical(kernel);
   }
+  return kernel;
+}
+
+function setupGraphical(kernel) {
+  const {x, y} = kernel.output;
+  if (kernel.context && kernel.context.createImageData) {
+    const data = new Uint8ClampedArray(x * y * 4);
+    kernel._imageData = kernel.context.createImageData(x, y);
+    kernel._colorData = data;
+  } else {
+    const data = new Uint8ClampedArray(x * y * 4);
+    kernel._imageData = { data };
+    kernel._colorData = data;
+  }
+}
+
+function setupOutput(output) {
+  let result = null;
+  if (output.length) {
+    if (output.length === 3) {
+      const [x,y,z] = output;
+      result = { x, y, z };
+    } else if (output.length === 2) {
+      const [x,y] = output;
+      result = { x, y };
+    } else {
+      const [x] = output;
+      result = { x };
+    }
+  } else {
+    result = output;
+  }
+  return result;
+}
+
+function gpuMock(fn, settings = {}) {
+  const output = settings.output ? setupOutput(settings.output) : null;
+  function kernel() {
+    if (kernel.output.z) {
+      return mock3D.apply(kernel, arguments);
+    } else if (kernel.output.y) {
+      if (kernel.graphical) {
+        return mock2DGraphical.apply(kernel, arguments);
+      }
+      return mock2D.apply(kernel, arguments);
+    } else {
+      return mock1D.apply(kernel, arguments);
+    }
+  }
+  kernel._fn = fn;
+  kernel.constants = settings.constants || null;
+  kernel.context = settings.context || null;
+  kernel.canvas = settings.canvas || null;
+  kernel.graphical = settings.graphical || false;
+  kernel._imageData = null;
+  kernel._colorData = null;
+  kernel.output = output;
+  kernel.thread = {
+    x: 0,
+    y: 0,
+    z: 0
+  };
+  return apiDecorate(kernel);
+}
+
+function flipPixels(pixels, width, height) {
+  // https://stackoverflow.com/a/41973289/1324039
+  const halfHeight = height / 2 | 0; // the | 0 keeps the result an int
+  const bytesPerRow = width * 4;
+  // make a temp buffer to hold one row
+  const temp = new Uint8ClampedArray(width * 4);
+  const result = pixels.slice(0);
+  for (let y = 0; y < halfHeight; ++y) {
+    const topOffset = y * bytesPerRow;
+    const bottomOffset = (height - y - 1) * bytesPerRow;
+
+    // make copy of a row on the top half
+    temp.set(result.subarray(topOffset, topOffset + bytesPerRow));
+
+    // copy a row from the bottom half to the top
+    result.copyWithin(topOffset, bottomOffset, bottomOffset + bytesPerRow);
+
+    // copy the copy of the top half row to the bottom half
+    result.set(temp, bottomOffset);
+  }
+  return result;
+}
+
+module.exports = {
+  gpuMock
 };
 
 },{}],4:[function(require,module,exports){
@@ -12952,9 +13136,17 @@ class WebGLFunctionNode extends FunctionNode {
     if (forNode.init) {
       this.pushState('in-for-loop-init');
       this.astGeneric(forNode.init, initArr);
-      for (let i = 0; i < initArr.length; i++) {
-        if (initArr[i].includes && initArr[i].includes(',')) {
+      const { declarations } = forNode.init;
+      for (let i = 0; i < declarations.length; i++) {
+        if (declarations[i].init && declarations[i].init.type !== 'Literal') {
           isSafe = false;
+        }
+      }
+      if (isSafe) {
+        for (let i = 0; i < initArr.length; i++) {
+          if (initArr[i].includes && initArr[i].includes(',')) {
+            isSafe = false;
+          }
         }
       }
       this.popState('in-for-loop-init');
@@ -14076,7 +14268,8 @@ class WebGLKernelValueDynamicSingleInput extends WebGLKernelValueSingleInput {
   }
 
   updateValue(value) {
-    this.dimensions = value.size;
+    let [w, h, d] = value.size;
+    this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedFloatTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
     this.uploadValue = new Float32Array(this.uploadArrayLength);
@@ -14132,7 +14325,8 @@ class WebGLKernelValueDynamicUnsignedInput extends WebGLKernelValueUnsignedInput
   }
 
   updateValue(value) {
-    this.dimensions = value.size;
+    let [w, h, d] = value.size;
+    this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedPackedTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * (4 / this.bitRatio);
     const Type = this.getTransferArrayType(value.value);
@@ -14530,7 +14724,8 @@ class WebGLKernelValueSingleInput extends WebGLKernelValue {
     super(value, settings);
     this.requestTexture();
     this.bitRatio = 4;
-    this.dimensions = value.size;
+    let [w, h, d] = value.size;
+    this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedFloatTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
     this.uploadValue = new Float32Array(this.uploadArrayLength);
@@ -14635,7 +14830,8 @@ class WebGLKernelValueUnsignedInput extends WebGLKernelValue {
     super(value, settings);
     this.requestTexture();
     this.bitRatio = this.getBitRatio(value);
-    this.dimensions = value.size;
+    const [w, h, d] = value.size;
+    this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedPackedTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * (4 / this.bitRatio);
     this.TranserArrayType = this.getTransferArrayType(value.value);
@@ -16815,7 +17011,8 @@ class WebGL2KernelValueDynamicSingleInput extends WebGL2KernelValueSingleInput {
   }
 
   updateValue(value) {
-    this.dimensions = value.size;
+    let [w, h, d] = value.size;
+    this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedFloatTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
     this.uploadValue = new Float32Array(this.uploadArrayLength);
@@ -17817,7 +18014,7 @@ module.exports = {
   vertexShader
 };
 },{}],83:[function(require,module,exports){
-const gpuMock = require('gpu-mock.js');
+const { gpuMock } = require('gpu-mock.js');
 const { utils } = require('./utils');
 const { CPUKernel } = require('./backend/cpu/kernel');
 const { HeadlessGLKernel } = require('./backend/headless-gl/kernel');
@@ -18296,6 +18493,7 @@ class GPU {
    * @desc Destroys all memory associated with gpu.js & the webGl if we created it
    */
   destroy() {
+    if (!this.kernels) return;
     // perform on next run loop - for some reason we dont get lose context events
     // if webGl is created and destroyed in the same run loop.
     setTimeout(() => {
@@ -18384,24 +18582,45 @@ module.exports = {
 class Input {
   constructor(value, size) {
     this.value = value;
-    this.size = new Int32Array(3);
     if (Array.isArray(size)) {
-      for (let i = 0; i < this.size.length; i++) {
-        this.size[i] = size[i] || 1;
-      }
+      this.size = size;
     } else {
+      this.size = new Int32Array(3);
       if (size.z) {
         this.size = new Int32Array([size.x, size.y, size.z]);
       } else if (size.y) {
-        this.size = new Int32Array([size.x, size.y, 1]);
+        this.size = new Int32Array([size.x, size.y]);
       } else {
-        this.size = new Int32Array([size.x, 1, 1]);
+        this.size = new Int32Array([size.x]);
       }
     }
 
-    const [h, w, d] = this.size;
-    if (this.value.length !== (h * w * d)) {
-      throw new Error(`Input size ${this.value.length} does not match ${w} * ${h} * ${d} = ${(h * w * d)}`);
+    const [w, h, d] = this.size;
+    if (d) {
+      if (this.value.length !== (w * h * d)) {
+        throw new Error(`Input size ${this.value.length} does not match ${w} * ${h} * ${d} = ${(h * w * d)}`);
+      }
+    } else if (h) {
+      if (this.value.length !== (w * h)) {
+        throw new Error(`Input size ${this.value.length} does not match ${w} * ${h} = ${(h * w)}`);
+      }
+    } else {
+      if (this.value.length !== w) {
+        throw new Error(`Input size ${this.value.length} does not match ${w}`);
+      }
+    }
+
+  }
+
+  toArray() {
+    const { utils } = require('./utils');
+    const [w, h, d] = this.size;
+    if (d) {
+      return utils.erectMemoryOptimized3DFloat(this.value.subarray ? this.value : new Float32Array(this.value), w, h, d);
+    } else if (h) {
+      return utils.erectMemoryOptimized2DFloat(this.value.subarray ? this.value : new Float32Array(this.value), w, h);
+    } else {
+      return this.value;
     }
   }
 }
@@ -18414,7 +18633,7 @@ module.exports = {
   Input,
   input
 };
-},{}],86:[function(require,module,exports){
+},{"./utils":89}],86:[function(require,module,exports){
 const { utils } = require('./utils');
 
 /**
@@ -19620,9 +19839,9 @@ process.umask = function() { return 0; };
 
 },{}],92:[function(require,module,exports){
 const kernel = [
-  [1, 1, 1],
-  [1, 1, 1],
-  [1, 1, 1]
+  [1, 2, 1],
+  [2, 1, 2],
+  [1, 2, 1]
 ]
 const kernelX = kernel[0].length,
   kernelY = kernel.length,
@@ -19699,14 +19918,20 @@ module.exports = {
 
 },{}],93:[function(require,module,exports){
 module.exports = size => {
-  const matrices = [[], []];
+  const matrices = [[], [], [], [], []];
 
   for (let y = 0; y < size; y++){
     matrices[0].push([]);
     matrices[1].push([]);
+    matrices[2].push([]);
+    matrices[3].push([]);
+    matrices[4].push([]);
     for (let x = 0; x < size; x++){
       matrices[0][y].push(Math.random());
       matrices[1][y].push(Math.random());
+      matrices[2][y].push(Math.random());
+      matrices[3][y].push(Math.random());
+      matrices[4][y].push(Math.random());
     }
   }
   return matrices;
@@ -19799,7 +20024,8 @@ const benchIt = require('./util/bench-it'),
   matConv = require('./benches/convolution'),
   { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution'),
   { YELLOW_UNDER, GREEN_NO_UNDER, NC } = require('./cli/colors'),
-  { generateStatsObj: generateStats } = require('./stats/getStats');
+  { generateStatsObj: generateStats } = require('./stats/getStats'),
+  getgetTextureKernel = require('./util/get-texture');
 
 /**
  * @method run
@@ -19807,8 +20033,13 @@ const benchIt = require('./util/bench-it'),
  * @return {"Object"}
  */
 const run = options => {
+  
+  const getTexture = getgetTextureKernel(options.gpu, options.matrix_size, options.matrix_size);
+
   const mat = benchIt(() => generateMatrices(options.matrix_size)),
     padded = benchIt(() => paddificate(mat.ret[0], paddingX, paddingY));
+  
+  getTexture.build(mat.ret[0]);
 
   const funcs = {
     mat_mult: matMult.generateFuncs(options.gpu, options.cpu, options.output),
@@ -19818,12 +20049,14 @@ const run = options => {
   const benchmarks = {
     mat_mult: {
       gpu: [],
-      pipe: [],
       cpu: []
     },
     mat_conv: {
       gpu: [],
-      pipe: [],
+      cpu: []
+    },
+    pipe: {
+      gpu: [],
       cpu: []
     }
   }
@@ -19841,27 +20074,48 @@ const run = options => {
 
   for (let i = 1; i <= options.num_benchmarks; i++){
     benchmarks.mat_mult.gpu.push(benchIt(() => funcs.mat_mult.gpu(mat.ret[0], mat.ret[1])).time);
-    benchmarks.mat_mult.pipe.push(benchIt(() => funcs.mat_mult.pipe(mat.ret[0], mat.ret[1]).toArray()).time);
     if (options.cpu_benchmark) {benchmarks.mat_mult.cpu.push(benchIt(() => funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])).time)}
 
     benchmarks.mat_conv.gpu.push(benchIt(() => funcs.mat_conv.gpu(padded.ret, kernel)).time);
-    benchmarks.mat_conv.pipe.push(benchIt(() => funcs.mat_conv.pipe(padded.ret, kernel).toArray()).time);
     if (options.cpu_benchmark) {benchmarks.mat_conv.cpu.push(benchIt(() => funcs.mat_conv.cpu(padded.ret, kernel)).time)}
+    
+    const matrixTexs = mat.ret.map(arr => getTexture(arr));
 
+    benchmarks.pipe.gpu.push(
+      benchIt(() => {
+        const func = funcs.mat_mult.pipe;
+
+        func(func(func(func(matrixTexs[0], matrixTexs[1]), matrixTexs[2]), matrixTexs[3]), matrixTexs[4]).toArray();
+      }).time
+    )
+
+    if (options.cpu_benchmark) {
+      benchmarks.pipe.cpu.push(
+        benchIt(() => {
+          const func = funcs.mat_mult.cpu;
+
+          func(func(func(func(mat.ret[0], mat.ret[1]), mat.ret[2]), mat.ret[3]), mat.ret[4]);
+        }).time
+      )
+    }
+    
     if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
   }
 
   const run_time = {
     mat_mult: {
       gpu: getMinMaxAvg(benchmarks.mat_mult.gpu),
-      pipe: getMinMaxAvg(benchmarks.mat_mult.pipe),
       cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_mult.cpu) : {min: -1, avg: -1, max: -1}
     },
 
     mat_conv: {
       gpu: getMinMaxAvg(benchmarks.mat_conv.gpu),
-      pipe: getMinMaxAvg(benchmarks.mat_conv.pipe),
       cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_conv.cpu) : {min: -1, avg: -1, max: -1}
+    },
+
+    pipe: {
+      gpu: getMinMaxAvg(benchmarks.pipe.gpu),
+      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.pipe.cpu) : {min: -1, avg: -1, max: -1}
     }
   }
   
@@ -19885,7 +20139,7 @@ const run = options => {
 
 module.exports = run;
 
-},{"./benches/convolution":92,"./benches/generate-matrices":93,"./benches/matrix-multiplication":94,"./cli/colors":95,"./stats/getStats":100,"./util/bench-it":101,"./util/get-min-max":102}],98:[function(require,module,exports){
+},{"./benches/convolution":92,"./benches/generate-matrices":93,"./benches/matrix-multiplication":94,"./cli/colors":95,"./stats/getStats":100,"./util/bench-it":101,"./util/get-min-max":102,"./util/get-texture":103}],98:[function(require,module,exports){
 const getDiff = (val1, val2) => Math.floor(((val2 - val1) / val2) * 10000) / 100;
 
 module.exports = (val1, val2) => val1 < val2 ? {diff: getDiff(val1, val2), greater: 0} : {diff: getDiff(val2, val1), greater: 1};
@@ -19921,18 +20175,21 @@ const generateStatsObj = (run_time, build_time) => {
   const 
     mat_mult = {
       diff: {
-        cpu_gpu: {},
-        gpu_pipe: {},
-        cpu_pipe: {}
+        cpu_gpu: {}
       },
       best_performer: '',
       worst_performer: ''
     },
     mat_conv = {
       diff: {
-        cpu_gpu: {},
-        gpu_pipe: {},
-        cpu_pipe: {}
+        cpu_gpu: {}
+      },
+      best_performer: '',
+      worst_performer: ''
+    },
+    pipe = {
+      diff: {
+        cpu_gpu: {}
       },
       best_performer: '',
       worst_performer: ''
@@ -19941,7 +20198,8 @@ const generateStatsObj = (run_time, build_time) => {
   const stats = {
     run_time: {
       mat_mult,
-      mat_conv
+      mat_conv,
+      pipe
     },
     build_time: {
       mat_mult: {diff: {gpu_pipe: {}}},
@@ -20011,6 +20269,8 @@ const generateStatsObj = (run_time, build_time) => {
         worse_performer = performer;
         worse_avg = Math.max(run_time[bench][performer].avg, worse_avg);
       }
+
+      if (run_time[bench][performer].avg == -1) better_avg = -1;
     }
 
     stats.run_time[bench].best_performer = better_performer;
@@ -20022,7 +20282,7 @@ const generateStatsObj = (run_time, build_time) => {
       better_performer = '',
       worse_total = 0,
       worse_performer = '';
-
+      let performerNotBenched;
     for (const performer in run_time[bench]){
       const performer_build_time = performer == 'cpu' ? 0 : build_time[bench][performer],
         performer_run_time = run_time[bench][performer].avg,
@@ -20031,6 +20291,8 @@ const generateStatsObj = (run_time, build_time) => {
         better_total = total_time;
         better_performer = performer;
       }
+
+      performerNotBenched = (performerNotBenched || run_time[bench][performer].avg == -1);
         
       if (total_time > worse_total && run_time[bench][performer].avg != -1){
         worse_total = total_time;
@@ -20038,6 +20300,9 @@ const generateStatsObj = (run_time, build_time) => {
       }
 
     }
+
+    if (performerNotBenched) worse_total = -1;
+
     stats.overall[bench].best_performer = better_performer;
     stats.overall[bench].worst_performer = worse_performer;
     stats.overall[bench].diff = formatDiff(getDiff(better_total, worse_total), [better_performer, worse_performer]);
@@ -20077,4 +20342,21 @@ module.exports = arr => {
     max
   }
 }
+},{}],103:[function(require,module,exports){
+/**
+ * @method getgetTextureKernel
+ * @param {"GPU"} gpu 
+ * @param {Number} arrayX 
+ * @param {Number} arrayY 
+ */
+const getgetTextureKernel = (gpu, arrayX, arrayY) => {
+  return gpu.createKernel(function(array) {
+    return array[this.thread.y][this.thread.x]
+  },
+  {
+    output: [arrayX, arrayY]
+  })
+}
+
+module.exports = getgetTextureKernel;
 },{}]},{},[96]);

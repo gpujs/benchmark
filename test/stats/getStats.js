@@ -33,11 +33,6 @@ test('generateStatsObj stats function test', t => {
         max: 20,
         avg: 15
       },
-      pipe: {
-        min: 5,
-        max: 10,
-        avg: 7.5
-      },
       cpu: {
         min: 20,
         max: 30,
@@ -50,15 +45,22 @@ test('generateStatsObj stats function test', t => {
         max: 12,
         avg: 10
       },
-      pipe: {
-        min: 9,
-        max: 18,
-        avg: 13.5
-      },
       cpu: {
         min: 5,
         max: 10,
         avg: 7.5
+      }
+    },
+    pipe: {
+      gpu: {
+        min: 100,
+        max: 120,
+        avg: 110
+      },
+      cpu: {
+        min: 2000,
+        max: 4000,
+        avg: 3000
       }
     }
   },
@@ -90,37 +92,9 @@ test('generateStatsObj stats function test', t => {
               percentage: 40,
               winner: 'gpu'
             }
-          },
-          gpu_pipe: {
-            min: {
-              percentage: 50,
-              winner: 'pipe'
-            },
-            max: {
-              percentage: 50,
-              winner: 'pipe'
-            },
-            avg: {
-              percentage: 50,
-              winner: 'pipe'
-            }
-          },
-          cpu_pipe: {
-            min: {
-              percentage: 75,
-              winner: 'pipe'
-            },
-            max: {
-              percentage: 66.66,
-              winner: 'pipe'
-            },
-            avg: {
-              percentage: 70,
-              winner: 'pipe'
-            }
           }
         },
-        best_performer: 'pipe',
+        best_performer: 'gpu',
         worst_performer: 'cpu'
       },
       mat_conv: {
@@ -138,38 +112,30 @@ test('generateStatsObj stats function test', t => {
               percentage: 25,
               winner: 'cpu'
             }
-          },
-          gpu_pipe: {
-            min: {
-              percentage: 11.11,
-              winner: 'gpu'
-            },
-            max: {
-              percentage: 33.33,
-              winner: 'gpu'
-            },
-            avg: {
-              percentage: 25.92,
-              winner: 'gpu'
-            }
-          },
-          cpu_pipe: {
-            min: {
-              percentage: 44.44,
-              winner: 'cpu'
-            },
-            max: {
-              percentage: 44.44,
-              winner: 'cpu'
-            },
-            avg: {
-              percentage: 44.44,
-              winner: 'cpu'
-            }
           }
         },
         best_performer: 'cpu',
-        worst_performer: 'pipe'
+        worst_performer: 'gpu'
+      },
+      pipe: {
+        diff: {
+          cpu_gpu: {
+            min: {
+              percentage: 95,
+              winner: 'gpu'
+            },
+            max: {
+              percentage: 97,
+              winner: 'gpu'
+            },
+            avg: {
+              percentage: 96.33,
+              winner: 'gpu'
+            }
+          }
+        },
+        best_performer: 'gpu',
+        worst_performer: 'cpu'
       }
     },
     build_time: {
@@ -201,9 +167,9 @@ test('generateStatsObj stats function test', t => {
       },
       mat_conv: {
         best_performer: 'cpu',
-        worst_performer: 'pipe',
+        worst_performer: 'gpu',
         diff: {
-          percentage: 80.51,
+          percentage: 75,
           winner: 'cpu'
         }
       }
@@ -214,12 +180,13 @@ test('generateStatsObj stats function test', t => {
 
   t.deepEqual(stats.run_time.mat_mult, expectedStats.run_time.mat_mult, 'generateStatsObj produces expected matrix multiplication run time stats');
   t.deepEqual(stats.run_time.mat_conv, expectedStats.run_time.mat_conv, 'generateStatsObj produces expected matrix convolution run time stats');
+  t.deepEqual(stats.run_time.pipe, expectedStats.run_time.pipe, 'generateStatsObj produces expected pipelining run time stats');
   
   t.deepEqual(stats.build_time.mat_mult, expectedStats.build_time.mat_mult, 'generateStatsObj produces expected matrix multiplication build time stats');
   t.deepEqual(stats.build_time.mat_conv, expectedStats.build_time.mat_conv, 'generateStatsObj produces expected matrix convolution build time stats');
   
   t.deepEqual(stats.overall.mat_mult, expectedStats.overall.mat_mult, 'generateStatsObj produces expected matrix multiplication overall stats');
-  t.deepEqual(stats.overall.mat_conv, expectedStats.overall.mat_conv, 'generateStatsObj produces expected matrix matrix convolution stats');
+  t.deepEqual(stats.overall.mat_conv, expectedStats.overall.mat_conv, 'generateStatsObj produces expected matrix convolution stats');
   
   t.end();
 })

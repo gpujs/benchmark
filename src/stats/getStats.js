@@ -45,7 +45,8 @@ const generateStatsObj = (run_time, build_time) => {
       pipe
     },
     build_time: {
-      mat_mult: {diff: {gpu_pipe: {}}}
+      mat_mult: {diff: {gpu_pipe: {}}},
+      mat_conv: {diff: {gpu_pipe: {}}}
     },
     overall: {
       mat_mult: {

@@ -6,7 +6,7 @@ test('generateMatrices function test', t => {
   
   const matrices = generateMatrices(matrixSize);
 
-  t.equal(matrices.length, 2, 'generateMatrices produces 2 matrices')
+  t.equal(matrices.length, 5, 'generateMatrices produces 5 matrices')
   
   t.equal(matrices[0][0].length, 3, 'X width of matrix 1 is correct')
   t.equal(matrices[0].length, 3, 'Y height of matrix 1 is correct')

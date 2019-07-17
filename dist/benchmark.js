@@ -20004,7 +20004,7 @@ const benchmark = (options = {}) => {
   options.logs = typeof options.logs != 'undefined' ? options.logs : true;
   options.cpu_benchmark = typeof options.cpu_benchmark != 'undefined' ? options.cpu_benchmark : true;
 
-  options.gpu = options.gpu || new GPU();
+  options.gpu = options.gpu || new GPU({mode: 'gpu'});
   options.cpu = options.cpu || new GPU({mode: 'cpu'});
 
   const out = run(options);

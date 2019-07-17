@@ -14,7 +14,7 @@ This tool runs two benchmarks:
 - [Benchmarks](#benchmarks)
 
 ### Installation
-We recommend you to install **Benchmark** as a development dependency.
+We recommend you to install **benchmark** as a development dependency.
 #### Using yarn
 ```sh
 yarn add --dev @gpujs/benchmark
@@ -23,6 +23,7 @@ yarn add --dev @gpujs/benchmark
 ```sh
 npm install --save-dev @gpujs/benchmark
 ```
+##### NOTE: If it asks for a GPU.js version, you can choose any version of your choice (>=v2.0.0-rc.10) but the provided dist files will have the version which was the latest during the release of the latest version of **benchmark**
 
 ### Browser Usage
 #### Building
@@ -81,6 +82,7 @@ npm install -g yarn
 ```sh
 yarn setup
 ```
+##### NOTE: If it asks for a GPU.js version, you can choose any version of your choice (>=v2.0.0-rc.10) but the provided dist files will have the version which was the latest during the release of the latest version of **benchmark**
 
 4. Run the tool in the CLI
 ```sh

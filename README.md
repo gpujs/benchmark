@@ -194,7 +194,7 @@ Options are optional parameters as a JavaScript `Object`.
   run_time: {
     mat_mult: {
       diff: {
-        gpu_cpu: {
+        cpu_gpu: {
           avg: {
             percentage: <Number>,
             winner: <String>
@@ -247,7 +247,7 @@ Options are optional parameters as a JavaScript `Object`.
 - `mat_mult` (Object): An Object containing all the statistics for the matrix multiplication benchmark.
 - `mat_conv` (Object): An Object containing all the statistics for the matrix convolution benchmark.
 - `diff` (Object): An Object containing percentage difference in run time performance.
-- `gpu_cpu` (Object): Performance comparison between the GPU and the CPU.
+- `cpu_gpu` (Object): Performance comparison between the GPU and the CPU.
 - `min` (Object): Performance comparison between the `min` values.
 - `max` (Object): Performance comparison between the `max` values.
 - `avg` (Object): Performance comparison between the `avg` values.

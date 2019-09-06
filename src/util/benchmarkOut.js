@@ -20,7 +20,7 @@ class BenchmarkOut {
 
   /**
    * 
-   * @param {*} newData new data object to be added to a multi-data aray
+   * @param {*} newData new data object to be added to a multi-data array
    */
   addData(newData) {
     if (!this.singleData) {

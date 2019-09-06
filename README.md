@@ -110,47 +110,7 @@ yarn start '{"num_benchmarks": 4}'
 ```
 
 ### Output
-The returned output is a JavaScript `Object` with the following structure.
-```js
-{
-  mat_gen: <Number>,
-  mat_pad: <Number>,
-
-  build_time: {
-    mat_mult: {
-      gpu: <Number>,
-      pipe: <number>
-    },
-    mat_conv: <Object> // same as mat_mult
-  },
-
-  run_time: {
-    mat_mult: {
-      gpu: {
-        min: <Number>,
-        max: <Number>,
-        avg: <Number>
-      },
-      cpu: {
-        min: <Number>,
-        max: <Number>,
-        avg: <Number>
-      }
-    },
-    mat_conv: <Object>, // same as mat_mult
-    pipe: <Object> // same as mat_mult
-  },
-
-  stats: <Object>,
-
-  score: {
-    gpu: <Number>,
-    cpu: <Number>
-  },
-
-  options: <Object>
-}
-```
+The returned output is a [`BenchmarkOut`](#benchmarkout-object) Object with the following properties.
 - `mat_gen`: The matrix generation time in `ms` accurate upto 2 decimal places.
 - `mat_pad`: The matrix padding time in `ms` accurate upto 2 decimal places.
 
@@ -288,3 +248,28 @@ The kernel is
 #### Pipelining
 This benchmark benchmarks the [pipelining](https://github.com/gpujs/gpu.js/blob/develop/README.md#pipelining) feature of GPU.js.
 It multiplies 5 matrices in sequence while the outputs are pipelined.
+
+### BenchmarkOut Object
+It is the instance of an ES6 class with the following methods and properties
+
+#### Properties
+1. `data`(Array/Object): This is a single object which stores all the data or an array of objects containing data for each benchmark.
+
+#### Methods
+1. `constructor(initData, singleData = false)`:
+- `initData`(Object): initial Data (optional)
+- `singleData`(Boolean): whether only a single data object is to be stored (default: `false`)
+
+2. `addData(newData)`: Adds a new data object to a multi-data array
+- `newdata`(Object): new data object to be added to a multi-data array
+
+3. `setDataField(field, value, index = 0)`: Sets the value of a specific field in the specified data object.
+- `field`(String): the field name
+- `value`(Any): the field value
+- `index`(Number): index of the data object in the multi-data array (Default: `0`, not required when singleData=`true`)
+
+4. `getDataField(field, index = 0)`: Returns the value of a specific field in the specified data object.
+- `field`(String): the field name
+- `index`(Number): index of the data object in the multi-data array (Default: `0`, not required when singleData=`true`)
+
+5. `getData()`: Returns the whole data Object/Array.

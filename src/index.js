@@ -1,6 +1,7 @@
 const { GPU } = require('gpu.js'),
   run = require('./run'),
-  getScore = require('./stats/getScore');
+  getScore = require('./stats/getScore'),
+  exportAsJson = require('./util/exportAsJson');
 
 /**
  * @method benchmark
@@ -22,6 +23,7 @@ const benchmark = (options = {}) => {
   const out = run(options);
 
   out.score = getScore(out, options.matrix_size);
+  out.JSON = exportAsJson.getBenchmarkJSON(out);
 
   return out;
 }

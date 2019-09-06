@@ -1,4 +1,4 @@
-const bench = require('./src/index'),
+const bench = require('./src/index').benchmark,
   logMinMax = require('./src/cli/log-min-max'),
   { GREEN_NO_UNDER, NC, RED_FLASH, YELLOW_UNDER, YELLOW_NO_UNDER } = require('./src/cli/colors'),
   { br } = require('./src/cli/format'),
@@ -27,7 +27,7 @@ br();
 console.log(`MATRIX SIZE: ${YELLOW_UNDER}${options.matrix_size || 512}${YELLOW_NO_UNDER}x${YELLOW_UNDER}${options.matrix_size || 512}${NC}`);
 br();
 
-const benchmarks = bench(options);
+const benchmarks = bench(options).getData();
 
 console.log(`matrix generation time: ${YELLOW_UNDER}${benchmarks.mat_gen}${NC} ms (generated 5 matrices)`);
 console.log(`matrix padding time: ${YELLOW_UNDER}${benchmarks.mat_pad}${NC} ms`);

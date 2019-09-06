@@ -1,7 +1,7 @@
 const { GPU } = require('gpu.js'),
   run = require('./run'),
   getScore = require('./stats/getScore'),
-  exportAsJson = require('./util/exportAsJson');
+  BenchmarkOut = require('./util/benchmarkOut');
 
 /**
  * @method benchmark
@@ -20,12 +20,24 @@ const benchmark = (options = {}) => {
   options.gpu = options.gpu || new GPU({mode: 'gpu'});
   options.cpu = options.cpu || new GPU({mode: 'cpu'});
 
-  const out = run(options);
-
-  out.score = getScore(out, options.matrix_size);
-  out.JSON = exportAsJson.getBenchmarkJSON(out);
+  const out = new BenchmarkOut(run(options), true);
+  
+  out.setDataField('score', getScore(out, options.matrix_size));
 
   return out;
 }
 
-module.exports = benchmark;
+/**
+ * @method multipleBenchmark
+ * @description runs multiple GPU.js benchmarks each with different options
+ * @param {"Array"} options array of optional options objects
+ * @returns {"Object"}
+ */
+const multipleBenchmark = (options = [{}]) => {
+  return out;
+}
+
+module.exports = {
+  benchmark,
+  multipleBenchmark
+}

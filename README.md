@@ -1,8 +1,9 @@
 ## Benchmark
 **Benchmark** is a simple benchmarking tool for GPU.js. This tool works both in JavaScript and in CLI.
 This tool runs two benchmarks:
-1. [Matrix Multiplication](https://en.wikipedia.org/wiki/Matrix_multiplication)
-2. [Matrix Convolution](https://en.wikipedia.org/wiki/Kernel_(image_processing))
+1. [Matrix Multiplication](#matrix-multiplication)
+2. [Matrix Convolution](#matrix-convolution)
+3. [Pipelining](#pipelining)
 
 ### Table of Contents
 - [Installation](#installation)

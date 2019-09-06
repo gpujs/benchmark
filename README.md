@@ -273,3 +273,5 @@ It is the instance of an ES6 class with the following methods and properties
 - `index`(Number): index of the data object in the multi-data array (Default: `0`, not required when singleData=`true`)
 
 5. `getData()`: Returns the whole data Object/Array.
+
+6. `getPlotlyJSON(compareFields)`: *To be filled*

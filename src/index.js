@@ -34,7 +34,7 @@ const benchmark = (options = {}) => {
  * @returns {"Object"}
  */
 const multipleBenchmark = (options = [{}]) => {
-  return out;
+  
 }
 
 module.exports = {

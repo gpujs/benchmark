@@ -1,3 +1,4 @@
+const convertToPlotlyJSON = require('./exportAsJson').getPlotlyJSON;
 class BenchmarkOut {
   /**
    * 
@@ -64,6 +65,36 @@ class BenchmarkOut {
    */
   getData() {
     return this.data;
+  }
+
+  /**
+   * @description 
+   * @param {"Object"} compareFields 
+   */
+  getPlotlyJSON(compareFields = [
+    {
+      x: 'matrix_size',
+      y: 'gpu_run_time_mat_mult'
+    },
+    {
+      x: 'matrix_size',
+      y: 'pipe_run_time'
+    },
+    {
+      x: 'matrix_size',
+      y: 'score'
+    }
+  ]) {
+    if (!this.singleData){
+      const retArr = [];
+      compareFields.forEach((compareField) => {
+        retArr.push(convertToPlotlyJSON(this.data, {
+          x: compareField.x,
+          y: compareField.y
+        }))
+      })
+    }
+    else throw "Only possible for multi-data arrays"
   }
 }
 

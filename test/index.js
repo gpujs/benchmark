@@ -1,5 +1,5 @@
 const test = require('tape'),
-  index = require('../src/index');
+  index = require('../src/index').benchmark;
 
 test('index.js entry point test', t => {
   const expectedDefaults = {
@@ -13,8 +13,8 @@ test('index.js entry point test', t => {
       cpu_benchmark: false
     };
 
-  const options = index().options;
-  const nonDefaultOptions = index(expectedNonDefaultOptions).options;
+  const options = index().getDataField('options');
+  const nonDefaultOptions = index(expectedNonDefaultOptions).getDataField('options');
 
   t.equal(options.matrix_size, expectedDefaults.matrix_size, 'Correct matrix_size default');
   t.equal(options.num_benchmarks, expectedDefaults.num_benchmarks, 'Correct num_benchmark default');

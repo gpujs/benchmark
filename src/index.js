@@ -4,11 +4,10 @@ const { GPU } = require('gpu.js'),
   BenchmarkOut = require('./util/benchmarkOut');
 
 /**
- * @method benchmark
- * @description benchmarks gpu.js
- * @param {"Object"} options Optional options
+ * 
+ * @param {"Object"} options 
  */
-const benchmark = (options = {}) => {
+const getDefaultOptions = (options) => {
   options.num_benchmarks = options.num_benchmarks || 1;
 
   options.matrix_size = options.matrix_size || 512;
@@ -20,8 +19,18 @@ const benchmark = (options = {}) => {
   options.gpu = options.gpu || new GPU({mode: 'gpu'});
   options.cpu = options.cpu || new GPU({mode: 'cpu'});
 
+  return options;
+}
+
+/**
+ * @method benchmark
+ * @description benchmarks gpu.js
+ * @param {"Object"} options Optional options
+ */
+const benchmark = (options = {}) => {
+
+  options = getDefaultOptions(options);
   const out = new BenchmarkOut(run(options), true);
-  
   out.setDataField('score', getScore(out, options.matrix_size));
 
   return out;
@@ -34,7 +43,16 @@ const benchmark = (options = {}) => {
  * @returns {"Object"}
  */
 const multipleBenchmark = (options = [{}]) => {
-  
+  const initOptions = getDefaultOptions(options[0]);
+  const out = new BenchmarkOut(run(initOptions), true);
+
+  options.forEach((optionSet, i) => {
+    if (i == 0) return;
+
+    out.addData(
+      run(getDefaultOptions(optionSet))
+    )
+  })
 }
 
 module.exports = {

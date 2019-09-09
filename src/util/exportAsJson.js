@@ -64,14 +64,14 @@ const getPlotlyJSON = (dataArr, axes = {x: '', y: ''}) => {
     return outData;
   }
 
-    dataArr.forEach(data => {
-      let x, y;
-      x = setVal(axes.x, data);
-      y = setVal(axes.y, data);
+  dataArr.forEach(data => {
+    let x, y;
+    x = setVal(axes.x, data);
+    y = setVal(axes.y, data);
 
-      out.x_series.push(x);
-      out.y_series.push(y);
-    })
+    out.x_series.push(x);
+    out.y_series.push(y);
+  })
 
   return out;
 }

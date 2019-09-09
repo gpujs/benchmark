@@ -2,10 +2,10 @@ const convertToPlotlyJSON = require('./exportAsJson').getPlotlyJSON;
 class BenchmarkOut {
   /**
    * 
+   * @param {Boolean} [singleData] whether only a single data object is to be stored
    * @param {*} [initData] initialData
-   * @param {Boolean} [singleData=false] whether only a single data object is to be stored
    */
-  constructor(initData, singleData = false) {
+  constructor(singleData = false, initData) {
     this.singleData = singleData;
 
     if (singleData) {

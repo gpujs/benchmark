@@ -30,7 +30,7 @@ const getDefaultOptions = (options) => {
 const benchmark = (options = {}) => {
 
   options = getDefaultOptions(options);
-  const out = new BenchmarkOut(run(options), true);
+  const out = new BenchmarkOut(true, run(options));
   out.setDataField('score', getScore(out.getDataField('run_time'), options.matrix_size));
 
   return out;
@@ -39,39 +39,71 @@ const benchmark = (options = {}) => {
 /**
  * @method multipleBenchmark
  * @description runs multiple GPU.js benchmarks each with different options
- * @param {"Array"} options array of optional options objects
+ * @param {"Object"} options array of optional options objects
  * @returns {"Object"}
  */
-const multipleBenchmark = (options = [{}]) => {
-  const initOptions = getDefaultOptions(options[0]);
-  const out = new BenchmarkOut(run(initOptions));
-  out.setDataField(
-    'score',
-    getScore(
-      out.getDataField('run_time', 0),
-      initOptions.matrix_size
-    ),
-    0
-  )
+const multipleBenchmark = (options = {
+  commonOptions: { // options common to all but can be overridden in range or in fullOptions, preference given to range
+    cpu_benchmark: false
+  },
+  range: { // only one of this and fullOptions works
+    optionName: 'matrix_size',
+    interval: [128, 1024],
+    step: 100 //(default 10) one of step or commonRatio can be used, preference given to step
+    // commonRatio: 2 (G.P.: 128, 256, 512, 1024)
+  },
+  fullOptions: [
+    {
+      // array of options objects for each benchmark(only one of this and range works, preference given to range)
+    }
+  ]
+}) => {
+  const out = new BenchmarkOut();
+  const commonBenchmarkOptions = getDefaultOptions(options.commonOptions);
+  const benchmarkOptionsArr = [];
 
-  options.forEach((optionSet, i) => {
-    if (i == 0) return;
+  if (options.range) {
+    const interval = options.range.interval,
+      optionName = options.range.optionName;
+    
+    if (options.range.step) {
+      const step = options.range.step;
 
-    out.addData(
-      run(getDefaultOptions(optionSet))
-    )
+      for (let i = interval[0]; i <= interval[1]; i += step) {
+        benchmarkOptionsArr.push({
+          ...commonBenchmarkOptions,
+        })
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = i;
+      }
+    }
+    else if (options.range.commonRatio) {
+      const commonRatio = options.range.commonRatio;
 
-    out.setDataField(
-      'score',
-      getScore(
-        out.getDataField('run_time', i),
-        optionSet.matrix_size
-      ),
-      i
-    )
-  })
+      for (let i = interval[0]; i <= interval[1]; i *= commonRatio) {
+        benchmarkOptionsArr.push({
+          ...commonBenchmarkOptions,
+        })
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = i;
+      }
+    }
+    else {
+      const step = 10;
 
-  return out;
+      for (let i = interval[0]; i <= interval[1]; i += step) {
+        benchmarkOptionsArr.push({
+          ...commonBenchmarkOptions,
+        })
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = i;
+      }
+    }
+
+
+  }
+  else if (options.fullOptions) {
+
+  }
+
+  return benchmarkOptionsArr;
 }
 
 module.exports = {

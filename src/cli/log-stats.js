@@ -3,7 +3,8 @@ const { NC, YELLOW_NO_UNDER, YELLOW_UNDER, GREEN_UNDER, GREEN_NO_UNDER, RED_NO_U
 
 const performerMap = {
   gpu: 'GPU',
-  cpu: 'CPU'
+  cpu: 'CPU',
+  pipe: 'GPU(pipeline mode)'
 },
 benchMap = {
   mat_mult: 'Matrix Multiplication',

@@ -56,7 +56,7 @@ class BenchmarkOut {
       return this.data[field];
     }
     else {
-      return this.data[index][field] = value;
+      return this.data[index][field];
     }
   }
 
@@ -69,12 +69,12 @@ class BenchmarkOut {
 
   /**
    * @description 
-   * @param {"Object"} compareFields 
+   * @param {"Array"} compareFields 
    */
   getPlotlyJSON(compareFields = [
     {
       x: 'matrix_size',
-      y: 'gpu_run_time_mat_mult'
+      y: 'gpu_run_time-mat_mult'
     },
     {
       x: 'matrix_size',
@@ -93,6 +93,8 @@ class BenchmarkOut {
           y: compareField.y
         }))
       })
+
+      return retArr;
     }
     else throw "Only possible for multi-data arrays"
   }

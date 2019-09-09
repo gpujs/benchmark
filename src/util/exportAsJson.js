@@ -29,41 +29,41 @@ const getBenchmarkJSON = (data) => {
  */
 const getPlotlyJSON = (dataArr, axes = {x: '', y: ''}) => {
   const out = {x_series: [], y_series: []}
+  
   const setVal = (input, data) => {
-    let out;
+    let outData;
     switch (input) {
       case 'matrix_size':
-        out = data.options.matrix_size;
+        outData = data.options.matrix_size;
         break;
 
       case 'gpu_score':
-        out = data.stats.score.gpu;
+        outData = data.stats.score.gpu;
         break;
       case 'cpu_score': 
-        out = data.stats.score.cpu;
+        outData = data.stats.score.cpu;
         break;
 
       case 'gpu_run_time_mat_mult':
-        out = data.run_time.mat_mult.gpu.avg;
+        outData = data.run_time.mat_mult.gpu.avg;
         break;
       case 'gpu_run_time_mat_conv':
-        out = data.run_time.mat_conv.gpu.avg;
+        outData = data.run_time.mat_conv.gpu.avg;
         break;
       case 'cpu_run_time_mat_mult':
-        out = data.run_time.mat_mult.cpu.avg;
+        outData = data.run_time.mat_mult.cpu.avg;
         break;
       case 'cpu_run_time_mat_conv':
-        out = data.run_time.mat_conv.cpu.avg;
+        outData = data.run_time.mat_conv.cpu.avg;
         break;
 
       case 'pipe_run_time':
-        out = data.run_time.pipe.gpu.avg;
+        outData = data.run_time.pipe.gpu.avg;
         break;
     }
-    return out;
+    return outData;
   }
 
-  if (axes.x && axes.y) {
     dataArr.forEach(data => {
       let x, y;
       x = setVal(axes.x, data);
@@ -72,7 +72,8 @@ const getPlotlyJSON = (dataArr, axes = {x: '', y: ''}) => {
       out.x_series.push(x);
       out.y_series.push(y);
     })
-  }
+
+  return out;
 }
 
 module.exports = {

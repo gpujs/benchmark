@@ -107,7 +107,11 @@ const multipleBenchmark = (options = {
     })
   }
 
-  return benchmarkOptionsArr;
+  benchmarkOptionsArr.forEach(benchmarkOption => {
+    out.addData(run(benchmarkOption));
+  })
+
+  return out;
 }
 
 module.exports = {

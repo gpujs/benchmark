@@ -38,10 +38,10 @@ const getPlotlyJSON = (dataArr, axes = {x: '', y: ''}) => {
         break;
 
       case 'gpu_score':
-        outData = data.stats.score.gpu;
+        outData = data.score.gpu;
         break;
       case 'cpu_score': 
-        outData = data.stats.score.cpu;
+        outData = data.score.cpu;
         break;
 
       case 'gpu_run_time_mat_mult':

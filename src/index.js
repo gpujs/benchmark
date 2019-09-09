@@ -11,7 +11,6 @@ const getDefaultOptions = (options) => {
   options.num_benchmarks = options.num_benchmarks || 1;
 
   options.matrix_size = options.matrix_size || 512;
-  options.output = [options.matrix_size, options.matrix_size];
 
   options.logs = typeof options.logs != 'undefined' ? options.logs : true;
   options.cpu_benchmark = typeof options.cpu_benchmark != 'undefined' ? options.cpu_benchmark : true;
@@ -100,7 +99,12 @@ const multipleBenchmark = (options = {
 
   }
   else if (options.fullOptions) {
-
+    options.fullOptions.forEach(optionSet => {
+      benchmarkOptionsArr.push({
+        ...commonBenchmarkOptions,
+        ...optionSet
+      })
+    })
   }
 
   return benchmarkOptionsArr;

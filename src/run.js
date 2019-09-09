@@ -14,6 +14,7 @@ const benchIt = require('./util/bench-it'),
  * @return {"Object"}
  */
 const run = options => {
+  options.output = [options.matrix_size, options.matrix_size];
   
   const getTexture = getgetTextureKernel(options.gpu, options.matrix_size, options.matrix_size);
 

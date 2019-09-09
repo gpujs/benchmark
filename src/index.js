@@ -31,7 +31,7 @@ const benchmark = (options = {}) => {
 
   options = getDefaultOptions(options);
   const out = new BenchmarkOut(run(options), true);
-  out.setDataField('score', getScore(out, options.matrix_size));
+  out.setDataField('score', getScore(out.getDataField('run_time'), options.matrix_size));
 
   return out;
 }
@@ -44,7 +44,15 @@ const benchmark = (options = {}) => {
  */
 const multipleBenchmark = (options = [{}]) => {
   const initOptions = getDefaultOptions(options[0]);
-  const out = new BenchmarkOut(run(initOptions), true);
+  const out = new BenchmarkOut(run(initOptions));
+  out.setDataField(
+    'score',
+    getScore(
+      out.getDataField('run_time', 0),
+      initOptions.matrix_size
+    ),
+    0
+  )
 
   options.forEach((optionSet, i) => {
     if (i == 0) return;
@@ -52,7 +60,18 @@ const multipleBenchmark = (options = [{}]) => {
     out.addData(
       run(getDefaultOptions(optionSet))
     )
+
+    out.setDataField(
+      'score',
+      getScore(
+        out.getDataField('run_time', i),
+        optionSet.matrix_size
+      ),
+      i
+    )
   })
+
+  return out;
 }
 
 module.exports = {

@@ -107,8 +107,13 @@ const multipleBenchmark = (options = {
     })
   }
 
-  benchmarkOptionsArr.forEach(benchmarkOption => {
+  benchmarkOptionsArr.forEach((benchmarkOption, i) => {
     out.addData(run(benchmarkOption));
+    out.setDataField(
+      'score',
+      getScore(out.getDataField('run_time', i), benchmarkOption.matrix_size),
+      i
+    )
   })
 
   return out;

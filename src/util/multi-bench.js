@@ -1,3 +1,8 @@
+const { YELLOW_UNDER, NC } = require('../cli/colors'),
+  BenchmarkOut = require('./benchmark-out'),
+  getDefaultOptions = require('./get-default-options'),
+  run = require('../run'),
+  { br } = require('../cli/format');
 /**
  * @method multipleBenchmark
  * @description runs multiple GPU.js benchmarks each with different options
@@ -71,7 +76,16 @@ const multipleBenchmark = (options = {
   }
 
   benchmarkOptionsArr.forEach((benchmarkOption, i) => {
+    console.log(`Config ${YELLOW_UNDER}#${i}${NC}:`);
+    
+    console.log(`MATRIX_SIZE: ${YELLOW_UNDER}${benchmarkOption.matrix_size}${NC}`);
+    console.log(`NUM_BENCHMARKS: ${YELLOW_UNDER}${benchmarkOption.num_benchmarks}${NC}`);
+    console.log(`CPU_BENCHMARK: ${YELLOW_UNDER}${benchmarkOption.cpu_benchmark}${NC}`);
+    br();
+    
     out.addData(run(benchmarkOption));
+    br();
+    br();
   })
 
   return out;

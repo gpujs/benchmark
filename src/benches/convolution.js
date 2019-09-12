@@ -48,7 +48,7 @@ const matConvFunc = `function (array, kernel) {
  * @param {"GPU"} gpu A GPU.js GPU object.
  * @param {"GPU"} cpu A GPU.js object with mode=cpu
  * @param {Float32Array|"Object"} output The output size
- * @returns {"Object"}
+ * @returns {{gpu: Object, pipe: Object, cpu: Object}}
  */
 const generateFuncs = (gpu, cpu, output) => {
   return {

@@ -4,8 +4,7 @@ const { GPU } = require('gpu.js'),
   multipleBenchmark = require('./util/multi-bench');
 
 /**
- * 
- * @param {"Object"} options 
+ * @param {...Options} options
  */
 const getDefaultOptions = (options) => {
   options.num_benchmarks = options.num_benchmarks || 1;
@@ -24,7 +23,7 @@ const getDefaultOptions = (options) => {
 /**
  * @method benchmark
  * @description benchmarks gpu.js
- * @param {"Object"} options Optional options
+ * @param {...Options} options Optional options
  */
 const benchmark = (options = {}) => {
 

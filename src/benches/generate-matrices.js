@@ -1,3 +1,9 @@
+/**
+ * @method generateMatrices
+ * @description generates 5 matrices of uniform x and y length
+ * @param size size of the matrices
+ * @returns {Float32Array}
+ */
 module.exports = size => {
   const matrices = [[], [], [], [], []];
 

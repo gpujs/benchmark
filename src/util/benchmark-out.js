@@ -1,9 +1,10 @@
-const convertToPlotlyJSON = require('./export-as-json').getPlotlyJSON;
+const { convertToPlotlyJSON: getPlotlyJSON } = require('./export-as-json');
+
 class BenchmarkOut {
   /**
-   * 
    * @param {Boolean} [singleData] whether only a single data object is to be stored
    * @param {*} [initData] initialData
+   * @returns {null}
    */
   constructor(singleData = false, initData) {
     this.singleData = singleData;
@@ -20,8 +21,9 @@ class BenchmarkOut {
   }
 
   /**
-   * 
-   * @param {*} newData new data object to be added to a multi-data array
+   * @method addData
+   * @param {Object} newData new data object to be added to a multi-data array
+   * @returns {null}
    */
   addData(newData) {
     if (!this.singleData) {
@@ -31,10 +33,11 @@ class BenchmarkOut {
   }
 
   /**
-   * 
+   * @method setDataField
    * @param {String} field the field name
    * @param {*} value the field value
    * @param {Number} [index=0] index of the data object in the multi-data array
+   * @returns {null}
    */
   setDataField(field, value, index = 0) {
     if (this.singleData) {
@@ -46,7 +49,7 @@ class BenchmarkOut {
   }
 
   /**
-   * 
+   * @method getDataField
    * @param {String} field the field name
    * @param {Number} [index=0] index of the data object in the multi-data array
    * @returns {*}
@@ -61,15 +64,16 @@ class BenchmarkOut {
   }
 
   /**
-   * @returns {"Object"}
+   * @method getData
+   * @returns {Object}
    */
   getData() {
     return this.data;
   }
 
   /**
-   * @description 
-   * @param {"Array"} compareFields 
+   * @description Returns a plotly style array of graphs
+   * @param {Array} compareFields
    */
   getPlotlyJSON(compareFields = [
     {

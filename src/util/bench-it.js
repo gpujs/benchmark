@@ -1,4 +1,9 @@
 const now = require('performance-now');
+/**
+ * @method benchIt
+ * @param {Function} func the function to be run
+ * @returns {{ret: *, time: Number}}
+ */
 module.exports = func => {
 
   let time = now() * (-1);

@@ -5,8 +5,9 @@ const benchIt = require('./util/bench-it'),
   matConv = require('./benches/convolution'),
   { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution'),
   { YELLOW_UNDER, GREEN_NO_UNDER, NC } = require('./cli/colors'),
-  { generateStatsObj: generateStats } = require('./stats/getStats'),
-  getgetTextureKernel = require('./util/get-texture');
+  { generateStatsObj: generateStats } = require('./stats/get-stats'),
+  getgetTextureKernel = require('./util/get-texture'),
+  getScore = require('./stats/get-score');
 
 /**
  * @method run
@@ -112,6 +113,8 @@ const run = options => {
     run_time,
 
     stats,
+
+    score: getScore(run_time, options.matrix_size),
 
     options
   }

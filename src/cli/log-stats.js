@@ -20,11 +20,9 @@ const logRunTimeStats = ({run_time}) => {
 
     for (const diff in run_time[bench].diff) {
       const performers = diff.split('_'),
-        { avg, min, max } = run_time[bench].diff[diff],
+        { avg } = run_time[bench].diff[diff],
         percentage = {
-          avg: run_time[bench].diff[diff].avg.percentage,
-          min: run_time[bench].diff[diff].min.percentage,
-          max: run_time[bench].diff[diff].max.percentage
+          avg: run_time[bench].diff[diff].avg.percentage
         };
 
       performerNotBenched = (performerNotBenched || percentage.min == -1 || percentage.max == -1 || percentage.avg == -1);
@@ -32,8 +30,6 @@ const logRunTimeStats = ({run_time}) => {
       if (!performerNotBenched){
         console.log(`Performance Comparison between ${YELLOW_NO_UNDER}${performerMap[performers[0]]}${NC} and ${YELLOW_NO_UNDER}${performerMap[performers[1]]}${NC}:`);
         br();
-        console.log(`Better Minimum Value Performer: ${YELLOW_NO_UNDER}${performerMap[min.winner]}${NC}, PERCENTAGE: ${YELLOW_UNDER}${percentage.min}${NC}%`);
-        console.log(`Better Maximum Value Performer: ${YELLOW_NO_UNDER}${performerMap[max.winner]}${NC}, PERCENTAGE: ${YELLOW_UNDER}${percentage.max}${NC}%`);
         console.log(`Better Average Value Performer: ${YELLOW_NO_UNDER}${performerMap[avg.winner]}${NC}, PERCENTAGE: ${YELLOW_UNDER}${percentage.avg}${NC}%`);
         br();
       }

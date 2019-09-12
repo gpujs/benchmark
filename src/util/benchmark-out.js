@@ -1,4 +1,4 @@
-const convertToPlotlyJSON = require('./exportAsJson').getPlotlyJSON;
+const convertToPlotlyJSON = require('./export-as-json').getPlotlyJSON;
 class BenchmarkOut {
   /**
    * 

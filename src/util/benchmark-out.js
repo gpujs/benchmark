@@ -1,4 +1,4 @@
-const { getPlotlyJSON: convertToPlotlyJSON } = require('./export-as-json');
+const { getPlotlyJSON: convertToPlotlyJSON, getChartistJSON: convertToChartistJSON } = require('./export-as-json');
 
 class BenchmarkOut {
   /**
@@ -93,6 +93,38 @@ class BenchmarkOut {
       const retArr = [];
       compareFields.forEach((compareField) => {
         retArr.push(convertToPlotlyJSON(this.data, {
+          x: compareField.x,
+          y: compareField.y
+        }))
+      })
+
+      return retArr;
+    }
+    else throw "Only possible for multi-data arrays"
+  }
+  
+  /**
+   * @description Returns a plotly style array of graphs
+   * @param {Array} compareFields
+   */
+  getChartistJSON(compareFields = [
+    {
+      x: 'matrix_size',
+      y: 'gpu_run_time-mat_mult'
+    },
+    {
+      x: 'matrix_size',
+      y: 'pipe_run_time'
+    },
+    {
+      x: 'matrix_size',
+      y: 'score'
+    }
+  ]) {
+    if (!this.singleData){
+      const retArr = [];
+      compareFields.forEach((compareField) => {
+        retArr.push(convertToChartistJSON(this.data, {
           x: compareField.x,
           y: compareField.y
         }))

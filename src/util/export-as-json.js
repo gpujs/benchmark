@@ -21,15 +21,7 @@ const getBenchmarkJSON = (data) => {
   return JSON.stringify(removeUnnecessaryProps(data));
 }
 
-/**
- * @method getPlotlyJSON
- * @description returns multiple benchmarks as plotly format graph JSON string
- * @param {"Array"} dataArr An array of benchmarks
- * @param {"Object"} axes An object containing x and y axis labels
- */
-const getPlotlyJSON = (dataArr, axes = {x: '', y: ''}) => {
-  const out = {x_series: [], y_series: []}
-  
+const getPlotData = (dataArr, axes, plotFunction) => {
   const setVal = (input, data) => {
     let outData;
     switch (input) {
@@ -69,6 +61,20 @@ const getPlotlyJSON = (dataArr, axes = {x: '', y: ''}) => {
     x = setVal(axes.x, data);
     y = setVal(axes.y, data);
 
+    plotFunction(x, y);
+  })
+}
+
+/**
+ * @method getPlotlyJSON
+ * @description returns multiple benchmarks as plotly format graph JSON string
+ * @param {"Array"} dataArr An array of benchmarks
+ * @param {"Object"} axes An object containing x and y axis labels
+ */
+const getPlotlyJSON = (dataArr, axes = {x: '', y: ''}) => {
+  const out = {x_series: [], y_series: []}
+  
+  getPlotData(dataArr, axes, (x, y) => {
     out.x_series.push(x);
     out.y_series.push(y);
   })
@@ -76,7 +82,27 @@ const getPlotlyJSON = (dataArr, axes = {x: '', y: ''}) => {
   return out;
 }
 
+/**
+ * @method getChartistJSON
+ * @description returns multiple benchmarks as chartist format graph JSON string
+ * @param {"Array"} dataArr An array of benchmarks
+ * @param {"Object"} axes An object containing x and y axis labels
+ */
+const getChartistJSON = (dataArr, axes = {x: '', y: ''}) => {
+  const out = [];
+  
+  getPlotData(dataArr, axes, (x, y) => {
+    out.push({
+      x,
+      y
+    })
+  })
+  
+  return out;
+}
+
 module.exports = {
   getBenchmarkJSON,
-  getPlotlyJSON
+  getPlotlyJSON,
+  getChartistJSON
 }

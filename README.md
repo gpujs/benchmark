@@ -61,7 +61,11 @@ import benchmark from '@gpujs/benchmark'
 
 2. Run it.
 ```js
-const benchmarks = benchmark(options)
+const benchmarks = benchmark.benchmark(options)
+```
+OR run [Multiple Benchmarks](#multiple-benchmarks)
+```js
+const benchmarks = benchmark.multipleBenchmark(options)
 ```
 This returns the benchmarks in an Object. See [this](#output).
 ##### NOTE: Options are optional parameters. See [this](#options).
@@ -94,10 +98,10 @@ yarn start
 node ./index.js
 ```
 #### Using CLI with options
-[options](#options) to the CLI are stored in stringified JSON object passed as an arguement.
 ```sh
 yarn start options
 ```
+[options](#options) is a  stringified JSON object passed as an argument.
 ##### OR using `node`
 ```sh
 node ./index.js options
@@ -109,169 +113,93 @@ Here, `options` is a stringified JSON object.
 yarn start '{"num_benchmarks": 4}'
 ```
 
-### Output
-The returned output is a [`BenchmarkOut`](#benchmarkout-object) Object with the following properties.
-- `mat_gen`: The matrix generation time in `ms` accurate upto 2 decimal places.
-- `mat_pad`: The matrix padding time in `ms` accurate upto 2 decimal places.
+#### Multiple Benchmarks in CLI
+```sh
+yarn start --multiple options
+```
+[options](#options) to the CLI are stored in stringified JSON object passed as an arguement.
+More about [Multiple Benchmarks](#multiple-benchmarks).
 
-1. `build_time`: Object containing kernel compilation times.
-- `mat_mult`: Compilation times for matrix multiplication kernel.
-- `mat_conv`: Compilation times for matrix convolution kernel.
-- `gpu`: Compilation time of the GPU kernel.
-- `pipe`: Compilation time of the GPU kernel with pipeline mode.
+#### Saving Graphs as JSON
+1. **Plotly Style JSON**
+```sh
+yarn start --multiple --returnPlotlyJSON
+```
+This will log to the console, [plotly.js](https://plot.ly/javascript/) style JSON which stores the graph data for GPU score v/s matrix size of each benchmark.
 
-2. `run_time`: Run times of each of the benchmarks.
-- `mat_mult`: Run times for [matrix multiplication benchmark](#matrix-multiplication).
-- `mat_conv`: Run times for [matrix convolution benchmark](#matrix-convolution).
-- `pipe`: Run times for the [pipelining benchmark](#pipelining).
-- `gpu`: Run times for the GPU benchmark.
-- `cpu`: Run times for the CPU benchmark.
-- `min`: Minimum benchmark time in `ms` accurate up to 2 decimal places. (If multiple benchmarks are run)
-- `max`: Maximum benchmark time in `ms` accurate up to 2 decimal places. (If multiple benchmarks are run)
-- `avg`: Average benchmark time in `ms` accurate up to 2 decimal places. (If multiple benchmarks are run)
+```sh
+yarn start --multiple --savePlotlyJSONToFile=path/to/file.json
+```
+This saves the [plotly.js](https://plot.ly/javascript/) style JSON data for:
+- GPU score v/s matrix size
+- GPU matrix multiplication run time v/s matrix size
+- CPU score v/s matrix size
+- CPU matrix multiplication run time v/s matrix size
 
-3. `stats`: An object which contains some statistics regarding the performances of different modes in different benchmarks. See [this](#stats)
+##### NOTE: If CPU is not benchmarked, CPU score and run time will have non-meaningful negative values which are to be ignored.
+##### NOTE: Filename need not have a `.json` extension.
 
-4. `score`: The score for the CPU and GPU calculated depending upon the matrix size and time taken.
+1. **Chartist Style JSON**
+```sh
+yarn start --multiple --returnChartistJSON
+```
+This will log to the console, [chartist.js](https://gionkunz.github.io/chartist-js/) style JSON which stores the graph data for GPU score v/s matrix size of each benchmark.
 
-5. `options`: The original options Object. See [this](#options)
+```sh
+yarn start --multiple --saveChartistJSONToFile=path/to/file.json
+```
+This saves the [[chartist.js](https://gionkunz.github.io/chartist-js/) style JSON data for:
+- GPU score v/s matrix size
+- GPU matrix multiplication run time v/s matrix size
+- CPU score v/s matrix size
+- CPU matrix multiplication run time v/s matrix size
 
-##### NOTE: If only a single benchmark is run, `min`, `max` and `avg` will have the same values
+##### NOTE: If CPU is not benchmarked, CPU score and run time will have non-meaningful negative values which are to be ignored.
+##### NOTE: Filename need not have a `.json` extension.
 
-### Options
-Options are optional parameters as a JavaScript `Object`.
-#### Properties
-1. `num_benchmarks`(Number): Number of times to run a benchmark. The output values will be `min`, `max` and `avg` of all the benchmarks. (default: `1`)
-2. `matrix_size`(Number): Size of the benchmark matrix which is uniform i.e. equal number of comlumns and rows. (default: `512`)
-3. `logs`(Boolean): Toggle non-CLI console logs. (default: `true`)
-4. `cpu_benchmark`(Boolean): Toggle CPU benchmarks. The `min`, `max` and `avg` values are set to `-1` if this option is set to `false`. (default: `true`) 
-5. `cpu`(Object): An optional custom `GPU` object with `{mode: 'cpu'}`(To use a specific version).
-6. `gpu`(Object): An optional custom `GPU` object (To use a specific version but version has to be >= 2.0.0)
+##### NOTE: One or more of the above arguments for JSON output can be used with `--multiple`
 
-### Stats
-`stats` is an `Object` with the following structure.
-```js
+### API
+
+#### Output
+The output of any benchmark(multiple or single) is a [`benchmarkOut`](#benchmarkout) Object.
+
+#### Options
+The following options can be passed on to the `benchmark` or `multipleBenchmark` method.
+
+1. `benchmark` options:
+- `matrix_size`(*Integer*): The size of the uniform matrix used for benchmarking. (default: 512)
+- `num_benchmarks`(*Integer*): The number of times the benchmark should be run. (default: 1)
+- `logs`(*Boolean*): Toggles console logs by the library.
+- `cpu_benchmark`(*Boolean*): Toggles the benchmarking of CPU. False is recommended to big matrix sizes. (default: true)
+- `cpu`(*Object*): A custom `GPU({mode: 'cpu})` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
+- `gpu`(*Object*): A custom `GPU()` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
+
+2. `multipleBenchmark` options:
+[Multiple Benchmark](#multiple-benchmarks) options have the following structure.
+```json
 {
-  run_time: {
-    mat_mult: {
-      diff: {
-        cpu_gpu: {
-          avg: {
-            percentage: <Number>,
-            winner: <String>
-          },
-          min: {
-            percentage: <Number>,
-            winner: <String>
-          },
-          max: {
-            percentage: <Number>,
-            winner: <String>
-          }
-        }
-      },
-      best_performer: <String>,
-      worst_performer: <String>
-    },
-    mat_conv: <Object>, // same as mat_mult
-    pipe: <Object> // same as mat_mult
+  commonOptions: { // options common to all but can be overridden in range or in fullOptions, preference given to range
+    cpu_benchmark: false
   },
-  
-  build_time: {
-    mat_mult: {
-      diff: {
-        gpu_pipe: {
-          percentage: <Number>,
-          winner: <String>
-        }
-      }
-    },
-    mat_conv: <Object> // same as mat_mult
+  range: { // only one of this and fullOptions works
+    optionName: 'matrix_size',
+    interval: [128, 1024],
+    step: 100 //(default 10)(A.P.: 128, 138, 148, 158) one of step or commonRatio can be used, preference given to step
+    // commonRatio: 2 (G.P.: 128, 256, 512, 1024)
   },
-
-  overall: {
-    mat_mult: {
-      best_performer: <String>,
-      worst_performer: <String>,
-      diff: {
-        percentage: <Number>,
-        winner: <Object>
-      }
+  fullOptions: [
+    {
+      // array of options objects for each benchmark(only one of this and range works, preference given to range)
     }
-    mat_conv: <Object> //same as mat_mult
-  }
+  ]
 }
 ```
+- `commonOptions`(*Object*): Options common to all the benchmarks that are run. (Same as `benchmark` options).
+- `range`(*Object*): Used to create a set of options using a set of rules, for each benchmark. (only one of range or fullOptions can be used)
+  - `optionName`(*String*): The option for which the range is applied. This has to be of type Number. It can be one of `benchmark` options.
+  - `interval`(*Array*): The upper and lower limits for the option.
+  - `step`(*Number*): The common difference between each option value. All the options will be in an AP. (only one of `step` or `commonRatio` can be used, preference given to `step`)
+  - `commonRatio`(*Number*): The common ratio between each option value. All the options will be in a GP. (only one of `step` or `commonRatio` can be used, preference given to `step`)
+- `fullOptions`(*Array*): An array of options object, each one corresponding to one benchmark. Each Objects is the same as `benchmark` options. (only one of range or fullOptions can be used)
 
-#### Properties
-1. `run_time` (Object): An Object containing all the run time statistics.
-- `mat_mult` (Object): An Object containing all the statistics for the matrix multiplication benchmark.
-- `mat_conv` (Object): An Object containing all the statistics for the matrix convolution benchmark.
-- `diff` (Object): An Object containing percentage difference in run time performance.
-- `cpu_gpu` (Object): Performance comparison between the GPU and the CPU.
-- `min` (Object): Performance comparison between the `min` values.
-- `max` (Object): Performance comparison between the `max` values.
-- `avg` (Object): Performance comparison between the `avg` values.
-- `percentage` (Number): Percentage difference in the performance.
-- `winner` (String): The best performer.
-- `best_performer` (String): The best run time performer (considering the `avg` values).
-- `worst_performer` (String): The worst run time performer (considering the `avg` values).
-
-2. `build_time` (Object): An Object containing all the build time statistics.
-- `mat_mult` (Object): An Object containing all the statistics for the [matrix multiplication](#matrix-multiplication) benchmark.
-- `mat_conv` (Object): An Object containing all the statistics for the [matrix convolution](#matrix-convolution) benchmark.
-- `pipe` (Object): An Object containing all the statistics for the [pipelining](#pipelining) benchmark.
-- `diff` (Object): An Object containing percentage difference in compilation performance.
-- `percentage` (Object): Percentage difference in the build time performance.
-- `winner` (Object): The best performer.
-
-3. `overall` (Object): An Object containing all the overall performance statistics i.e. build time and run time performance statistics (considering the `avg` values).
-- `best_performer` (String): The best overall performer.
-- `worst_performer` (String): The worst overall performer.
-- `diff` (Object): An Object containing percentage difference in overall performance between the best and the worst performer.
-- `percentage` (Number): Percentage difference in overall the performance between the best and the worst performer.
-- `winner` (String): The best performer.
-
-### Benchmarks
-#### Matrix Multiplication
-[Multiplies 2 matrices](https://en.wikipedia.org/wiki/Matrix_multiplication) of a given size and returns the time taken.
-
-#### Matrix Convolution
-[Convolves](https://en.wikipedia.org/wiki/Kernel_(image_processing)) a 3x3 kernel over the main matrix of a given size.
-The kernel is
-```
-1 2 1
-2 1 2
-1 2 1
-```
-
-#### Pipelining
-This benchmark benchmarks the [pipelining](https://github.com/gpujs/gpu.js/blob/develop/README.md#pipelining) feature of GPU.js.
-It multiplies 5 matrices in sequence while the outputs are pipelined.
-
-### BenchmarkOut Object
-It is the instance of an ES6 class with the following methods and properties
-
-#### Properties
-1. `data`(Array/Object): This is a single object which stores all the data or an array of objects containing data for each benchmark.
-
-#### Methods
-1. `constructor(initData, singleData = false)`:
-- `initData`(Object): initial Data (optional)
-- `singleData`(Boolean): whether only a single data object is to be stored (default: `false`)
-
-2. `addData(newData)`: Adds a new data object to a multi-data array
-- `newdata`(Object): new data object to be added to a multi-data array
-
-3. `setDataField(field, value, index = 0)`: Sets the value of a specific field in the specified data object.
-- `field`(String): the field name
-- `value`(Any): the field value
-- `index`(Number): index of the data object in the multi-data array (Default: `0`, not required when singleData=`true`)
-
-4. `getDataField(field, index = 0)`: Returns the value of a specific field in the specified data object.
-- `field`(String): the field name
-- `index`(Number): index of the data object in the multi-data array (Default: `0`, not required when singleData=`true`)
-
-5. `getData()`: Returns the whole data Object/Array.
-
-6. `getPlotlyJSON(compareFields)`: *To be filled*

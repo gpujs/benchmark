@@ -105,10 +105,25 @@ if (!multiple) {
 else {
   const benchmark = multipleBenchmark(options);
   
-  if (process.argv.includes('--returnJSON')){
+  if (process.argv.includes('--returnPlotlyJSON')){
+    br();
+    console.log('PLOTLY JSON:');
     br();
     
     console.log(benchmark.getPlotlyJSON([{
+      x: 'matrix_size',
+      y: 'gpu_score'
+    }]))
+    
+    br();
+  }
+  
+  if (process.argv.includes('--returnChartistJSON')){
+    br();
+    console.log('CHARTIST JSON:');
+    br();
+    
+    console.log(benchmark.getChartistJSON([{
       x: 'matrix_size',
       y: 'gpu_score'
     }]))
@@ -137,12 +152,38 @@ else {
     fs.writeFileSync(filename, content);
   }
   
-  let saveOpt = process.argv.find(opt => /^--saveJsonToFile=/.test(opt));
+  let saveOpt = process.argv.find(opt => /^--savePlotlyJSONToFile=/.test(opt));
   if (saveOpt !== undefined) {
-    saveOpt = saveOpt.replace(/^--saveJsonToFile=/, '').replace(/.json$/, '');
+    saveOpt = saveOpt.replace(/^--savePlotlyJSONToFile=/, '').replace(/.json$/, '');
     
     writeFileSyncRecursive(`${saveOpt}.json`, JSON.stringify(
       benchmark.getPlotlyJSON([
+        {
+          x: 'matrix_size',
+          y: 'gpu_score'   
+        },
+        {
+          x: 'matrix_size',
+          y: 'gpu_run_time_mat_mult'
+        },
+        {
+          x: 'matrix_size',
+          y: 'cpu_score'   
+        },
+        {
+          x: 'matrix_size',
+          y: 'cpu_run_time_mat_mult'
+        }
+      ])
+    ));
+  }
+  
+  saveOpt = process.argv.find(opt => /^--saveChartistJSONToFile=/.test(opt));
+  if (saveOpt !== undefined) {
+    saveOpt = saveOpt.replace(/^--saveChartistJSONToFile=/, '').replace(/.json$/, '');
+    
+    writeFileSyncRecursive(`${saveOpt}.json`, JSON.stringify(
+      benchmark.getChartistJSON([
         {
           x: 'matrix_size',
           y: 'gpu_score'   

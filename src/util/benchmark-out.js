@@ -86,7 +86,7 @@ class BenchmarkOut {
     },
     {
       x: 'matrix_size',
-      y: 'score'
+      y: 'gpu_score'
     }
   ]) {
     if (!this.singleData){
@@ -118,7 +118,7 @@ class BenchmarkOut {
     },
     {
       x: 'matrix_size',
-      y: 'score'
+      y: 'gpu_score'
     }
   ]) {
     if (!this.singleData){

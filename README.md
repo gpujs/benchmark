@@ -233,7 +233,7 @@ The following options can be passed on to the `benchmark` or `multipleBenchmark`
 
 2. `multipleBenchmark` options:
 [Multiple Benchmark](#multiple-benchmarks) options have the following structure.
-```json
+```js
 {
   commonOptions: { // options common to all but can be overridden in range or in fullOptions, preference given to range
     cpu_benchmark: false

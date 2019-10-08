@@ -1,12 +1,12 @@
 {
   "name": "@gpujs/benchmark",
-  "version": "1.2.3",
+  "version": "2.0.0",
   "private": false,
   "description": "A benchmarking tool for gpu.js",
   "main": "src/index.js",
   "scripts": {
     "start": "node ./index.js",
-    "setup": "yarn install",
+    "setup": "yarn install && yarn build",
     "test": "TEST=true tape test/util/*.js test/stats/*.js test/benches/*.js test/index.js test/run.js | tap-spec",
     "build": "node ./build.js",
     "npm-publish": "yarn test && yarn build && git add dist/ && git commit -m 'dist files' && yarn publish"

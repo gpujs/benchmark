@@ -18,7 +18,6 @@ const run = options => {
   options.output = [options.matrix_size, options.matrix_size];
   
   const getTexture = getgetTextureKernel(options.gpu, options.matrix_size, options.matrix_size);
-
   const mat = benchIt(() => generateMatrices(options.matrix_size)),
     padded = benchIt(() => paddificate(mat.ret[0], paddingX, paddingY));
   
@@ -109,11 +108,9 @@ const run = options => {
     mat_pad: padded.time,
 
     build_time,
-
     run_time,
 
     stats,
-
     score: getScore(run_time, options.matrix_size),
 
     options

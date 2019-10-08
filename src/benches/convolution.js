@@ -3,11 +3,11 @@ const kernel = [
   [2, 1, 2],
   [1, 2, 1]
 ]
+
 const kernelX = kernel[0].length,
   kernelY = kernel.length,
   paddingX = Math.floor(kernelX / 2),
   paddingY = Math.floor(kernelY / 2);
-
 
 /**
  * @method paddificate

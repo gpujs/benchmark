@@ -218,7 +218,7 @@ This saves the [chartist.js](https://gionkunz.github.io/chartist-js/) style JSON
 ### API
 
 #### Output
-The output of any benchmark(multiple or single) is a [`benchmarkOut`](#benchmarkout) Object.
+The output of any benchmark(multiple or single) is a [`BenchmarkOut`](#benchmarkout) Object.
 
 #### Options
 The following options can be passed on to the `benchmark` or `multipleBenchmark` method.
@@ -278,6 +278,29 @@ The [output](#output) contains a `stats` property which shows the overall stats 
 - - - `best_performer`(`gpu` | `cpu`): The best overall performer.
 - - - `worst_performer`(`gpu` | `cpu`): The worst overall performer.
 - - - `diff`: Same as the diff object in `run_time`
+
+- `score`: The score object is a property of the main output object.
+- - `gpu`, `cpu`(*Number*): The score is a number representing the overall normalized averge performance of the GPU or CPU. This score can be directly compared to other benchmarks or hardware.
+
+#### BenchmarkOut
+This object stores the output of **Benchmark**.
+
+##### Methods
+- `getDataField(field, index = 0)`(returns: ***): Gets any one of the output field(property).
+- - `field`(*String*): The name of the field.
+- - `index`(Number): The index of the benchmark if multiple benchmarks are run.
+- `getPlotlyJSON(compareFields)`, `getChartistJSON(compareFields)`(Returns: *Array*): Returns plotly style JSON for charts. (only for multiple benchmarks)
+- - `compareFields`: An array of objects having two properties `x` and `y` representing the data to be plotted on their respective axes.
+- - - `x`, `y`(*String*): Can be one of:
+- - - - `matrix_size`
+- - - - `gpu_score`
+- - - - `cpu_score`
+- - - - `gpu_run_time_mat_mult`: GPU matrix multiplication run time
+- - - - `cpu_run_time_mat_mult`: CPU matrix multiplication run time
+- - - - `gpu_run_time_mat_conv`: GPU matrix convolution run time
+- - - - `cpu_run_time_mat_conv`: CPU matrix convolution run time
+- - - - `pipe_run_time`: GPU pipelining run time
+
 
 #### Benchmarks
 

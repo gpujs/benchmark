@@ -78,7 +78,7 @@ class BenchmarkOut {
   getPlotlyJSON(compareFields = [
     {
       x: 'matrix_size',
-      y: 'gpu_run_time-mat_mult'
+      y: 'gpu_run_time_mat_mult'
     },
     {
       x: 'matrix_size',
@@ -110,7 +110,7 @@ class BenchmarkOut {
   getChartistJSON(compareFields = [
     {
       x: 'matrix_size',
-      y: 'gpu_run_time-mat_mult'
+      y: 'gpu_run_time_mat_mult'
     },
     {
       x: 'matrix_size',

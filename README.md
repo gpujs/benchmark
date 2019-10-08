@@ -1,6 +1,6 @@
 ## Benchmark
-**Benchmark** is a simple benchmarking tool for GPU.js. This tool works both in JavaScript and in CLI.
-This tool runs two benchmarks:
+**Benchmark** is a simple benchmarking tool for GPU.js. This tool works both in JavaScript and CLI.
+This tool runs three benchmarks:
 1. [Matrix Multiplication](#matrix-multiplication)
 2. [Matrix Convolution](#matrix-convolution)
 3. [Pipelining](#pipelining)
@@ -9,6 +9,7 @@ This tool runs two benchmarks:
 - [Installation](#installation)
 - [Browser Usage](#browser-usage)
 - [Usage](#usage)
+- [Multiple Benchmarks](#multiple-benchmarks)
 - [Output](#output)
 - [Options](#options)
 - [Stats](#stats)
@@ -117,8 +118,63 @@ yarn start '{"num_benchmarks": 4}'
 ```sh
 yarn start --multiple options
 ```
-[options](#options) to the CLI are stored in stringified JSON object passed as an arguement.
+[options](#options) to the CLI are stored in a stringified JSON object passed as an argument.
 More about [Multiple Benchmarks](#multiple-benchmarks).
+
+#### Multiple Benchmarks
+**Benchmark** allows you to run a sequence of benchmarks each with different custom options or each having number options like matrix size changed by a fixed amount.
+
+```js
+benchmark.multipleBenchmark(options);
+```
+Where options is an object with the following properties:
+- `commonOptions`(*Object*): Options common to every benchmark in a sequence. (default: `{cpu_benchmark: false}`)
+- `range`(*Object*): Define a range of option(number type) values, one for each benchmark in the sequence. *e.g.*: matrix_size: 512, 1024, 1536... or matrix_size: 512, 1024, 2048 ...
+Here, the specified option can either be incremented by a fixed number(common difference) or multiplied by a fixed number(common factor).
+- - `optionName`(*String*): The name of the option for which the range is to be set. *e.g.*: matrix_size (Default: `matrix_size`)
+- - `interval`(*Array*): An array with upper and lower limits for the range. *e.g.*: [512, 2048] (Default: `[128, 1024]`)
+- - `step`(*Number*): The fixed number which is to be added(common difference). (Default: `100`)
+- - `commonRatio`(*Number*): The fixed number to be multiplied. (Default: none) 
+###### NOTE: Only one of `step` and `commonRatio` can be used 
+- `fullOptions`(*Array*): An array of objects specifying separate set of options for each benchmark in the sequence(commonOptions properties can be overridden here). (Default: none)
+###### NOTE: Only one of `range` and `fullOptions` can be used
+
+##### Examples
+1. Range: 
+```js
+benchmark.multipleBenchmark({
+  commonOptions: {
+    cpu_benchmark: false,
+    logs: false
+  },
+  range: {
+    optionName: 'matrix_size',
+    interval: [128, 2048],
+    commonRatio: 2
+  }
+})
+```
+The above code runs a separate benchmark for the matrix sizes 128, 256, 512, 1024, 2048 which are in GP.
+
+2. fullOptions:
+```js
+benchmark.multipleBenchmark({
+  commonOptions: {
+    logs: false,
+    cpu_benchmark: false
+  },
+  fullOptions: [
+    {
+      logs: true, // override
+      matrix_size: 2048
+    },
+    {
+      cpu_benchmark: true, //override
+      matrix_size: 128
+    }
+  ]
+})
+```
 
 #### Saving Graphs as JSON
 1. **Plotly Style JSON**
@@ -148,7 +204,7 @@ This will log to the console, [chartist.js](https://gionkunz.github.io/chartist-
 ```sh
 yarn start --multiple --saveChartistJSONToFile=path/to/file.json
 ```
-This saves the [[chartist.js](https://gionkunz.github.io/chartist-js/) style JSON data for:
+This saves the [chartist.js](https://gionkunz.github.io/chartist-js/) style JSON data for:
 - GPU score v/s matrix size
 - GPU matrix multiplication run time v/s matrix size
 - CPU score v/s matrix size
@@ -201,5 +257,42 @@ The following options can be passed on to the `benchmark` or `multipleBenchmark`
   - `interval`(*Array*): The upper and lower limits for the option.
   - `step`(*Number*): The common difference between each option value. All the options will be in an AP. (only one of `step` or `commonRatio` can be used, preference given to `step`)
   - `commonRatio`(*Number*): The common ratio between each option value. All the options will be in a GP. (only one of `step` or `commonRatio` can be used, preference given to `step`)
-- `fullOptions`(*Array*): An array of options object, each one corresponding to one benchmark. Each Objects is the same as `benchmark` options. (only one of range or fullOptions can be used)
+- `fullOptions`(*Array*): An array of options object, each one corresponding to one benchmark. Each object is the same as `benchmark` options. (only one of range or fullOptions can be used)
 
+#### Stats
+The [output](#output) contains a `stats` property which shows the overall stats of the benchmark:
+- `run_time`: The run time stats
+- - `mat_mult`, `mat_conv`, `pipe`(*Object*): These three objects contain the stats for each type of benchmark.
+- - - `diff`: Has a single property which cotains performance comparison scores between CPU and GPU.
+- - - - `cpu_gpu`:
+- - - - - `min`, `max`, `avg`: The minimum, maximum and average time taken stats
+- - - - - - `winner`(`gpu` | `cpu`): The better performer among the two.
+- - - - - - `percentage`(*Number*): By how much percentage it is better.
+
+- `build_time`: The build time stats
+- - `mat_mult`, `mat_conv`: Built time stats for each benchmark.
+- - - `diff`: Same as the diff object in `run_time` except that it compares GPU v/s GPU(pipeline mode) in the property `gpu_pipe`.
+
+- `overall`: The overall stats
+- - `mat_mult`, `mat_conv`: Overall stats for each benchmark
+- - - `best_performer`(`gpu` | `cpu`): The best overall performer.
+- - - `worst_performer`(`gpu` | `cpu`): The worst overall performer.
+- - - `diff`: Same as the diff object in `run_time`
+
+#### Benchmarks
+
+##### Matrix Multiplication
+This benchmark [multiplies](https://www.mathsisfun.com/algebra/matrix-multiplying.html) two randomly generated uniform-sized matrices and benchmarks the GPU and CPU against the time taken by each.
+
+##### Matrix Convolution
+This benchmark [convolves](https://en.wikipedia.org/wiki/Kernel_(image_processing)#Convolution) a 3x3 [kernel](https://en.wikipedia.org/wiki/Kernel_(image_processing)) over a randomly generated uniform sized matrix.
+The convolution kernel is
+```
+1 2 1
+2 1 2
+1 2 1
+```
+
+##### Pipelining
+GPU.js supports a feature called [Pipelining](https://github.com/gpujs/gpu.js#pipelining) and this benchmark benchmarks this feature.
+It runs three matrix multiplication benchmarks in a sequence while pipelining the output of the earlier benchmark to be used as an input to the next one. The benchmark is run both on the GPU and the CPU(without pipelining) and the time taken is compared.

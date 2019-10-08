@@ -1,4 +1,2439 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+'use strict'
+
+exports.byteLength = byteLength
+exports.toByteArray = toByteArray
+exports.fromByteArray = fromByteArray
+
+var lookup = []
+var revLookup = []
+var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
+
+var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+for (var i = 0, len = code.length; i < len; ++i) {
+  lookup[i] = code[i]
+  revLookup[code.charCodeAt(i)] = i
+}
+
+// Support decoding URL-safe base64 strings, as Node.js does.
+// See: https://en.wikipedia.org/wiki/Base64#URL_applications
+revLookup['-'.charCodeAt(0)] = 62
+revLookup['_'.charCodeAt(0)] = 63
+
+function getLens (b64) {
+  var len = b64.length
+
+  if (len % 4 > 0) {
+    throw new Error('Invalid string. Length must be a multiple of 4')
+  }
+
+  // Trim off extra bytes after placeholder bytes are found
+  // See: https://github.com/beatgammit/base64-js/issues/42
+  var validLen = b64.indexOf('=')
+  if (validLen === -1) validLen = len
+
+  var placeHoldersLen = validLen === len
+    ? 0
+    : 4 - (validLen % 4)
+
+  return [validLen, placeHoldersLen]
+}
+
+// base64 is 4/3 + up to two characters of the original data
+function byteLength (b64) {
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+function _byteLength (b64, validLen, placeHoldersLen) {
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+function toByteArray (b64) {
+  var tmp
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
+
+  var arr = new Arr(_byteLength(b64, validLen, placeHoldersLen))
+
+  var curByte = 0
+
+  // if there are placeholders, only get up to the last complete 4 chars
+  var len = placeHoldersLen > 0
+    ? validLen - 4
+    : validLen
+
+  for (var i = 0; i < len; i += 4) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 18) |
+      (revLookup[b64.charCodeAt(i + 1)] << 12) |
+      (revLookup[b64.charCodeAt(i + 2)] << 6) |
+      revLookup[b64.charCodeAt(i + 3)]
+    arr[curByte++] = (tmp >> 16) & 0xFF
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  if (placeHoldersLen === 2) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 2) |
+      (revLookup[b64.charCodeAt(i + 1)] >> 4)
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  if (placeHoldersLen === 1) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 10) |
+      (revLookup[b64.charCodeAt(i + 1)] << 4) |
+      (revLookup[b64.charCodeAt(i + 2)] >> 2)
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  return arr
+}
+
+function tripletToBase64 (num) {
+  return lookup[num >> 18 & 0x3F] +
+    lookup[num >> 12 & 0x3F] +
+    lookup[num >> 6 & 0x3F] +
+    lookup[num & 0x3F]
+}
+
+function encodeChunk (uint8, start, end) {
+  var tmp
+  var output = []
+  for (var i = start; i < end; i += 3) {
+    tmp =
+      ((uint8[i] << 16) & 0xFF0000) +
+      ((uint8[i + 1] << 8) & 0xFF00) +
+      (uint8[i + 2] & 0xFF)
+    output.push(tripletToBase64(tmp))
+  }
+  return output.join('')
+}
+
+function fromByteArray (uint8) {
+  var tmp
+  var len = uint8.length
+  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+  var parts = []
+  var maxChunkLength = 16383 // must be multiple of 3
+
+  // go through the array every three bytes, we'll deal with trailing stuff later
+  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
+    parts.push(encodeChunk(
+      uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)
+    ))
+  }
+
+  // pad the end with zeros, but make sure to not forget the extra bytes
+  if (extraBytes === 1) {
+    tmp = uint8[len - 1]
+    parts.push(
+      lookup[tmp >> 2] +
+      lookup[(tmp << 4) & 0x3F] +
+      '=='
+    )
+  } else if (extraBytes === 2) {
+    tmp = (uint8[len - 2] << 8) + uint8[len - 1]
+    parts.push(
+      lookup[tmp >> 10] +
+      lookup[(tmp >> 4) & 0x3F] +
+      lookup[(tmp << 2) & 0x3F] +
+      '='
+    )
+  }
+
+  return parts.join('')
+}
+
+},{}],2:[function(require,module,exports){
+(function (process,__filename){
+/**
+ * Module dependencies.
+ */
+
+var fs = require('fs'),
+  path = require('path'),
+  fileURLToPath = require('file-uri-to-path'),
+  join = path.join,
+  dirname = path.dirname,
+  exists =
+    (fs.accessSync &&
+      function(path) {
+        try {
+          fs.accessSync(path);
+        } catch (e) {
+          return false;
+        }
+        return true;
+      }) ||
+    fs.existsSync ||
+    path.existsSync,
+  defaults = {
+    arrow: process.env.NODE_BINDINGS_ARROW || ' → ',
+    compiled: process.env.NODE_BINDINGS_COMPILED_DIR || 'compiled',
+    platform: process.platform,
+    arch: process.arch,
+    nodePreGyp:
+      'node-v' +
+      process.versions.modules +
+      '-' +
+      process.platform +
+      '-' +
+      process.arch,
+    version: process.versions.node,
+    bindings: 'bindings.node',
+    try: [
+      // node-gyp's linked version in the "build" dir
+      ['module_root', 'build', 'bindings'],
+      // node-waf and gyp_addon (a.k.a node-gyp)
+      ['module_root', 'build', 'Debug', 'bindings'],
+      ['module_root', 'build', 'Release', 'bindings'],
+      // Debug files, for development (legacy behavior, remove for node v0.9)
+      ['module_root', 'out', 'Debug', 'bindings'],
+      ['module_root', 'Debug', 'bindings'],
+      // Release files, but manually compiled (legacy behavior, remove for node v0.9)
+      ['module_root', 'out', 'Release', 'bindings'],
+      ['module_root', 'Release', 'bindings'],
+      // Legacy from node-waf, node <= 0.4.x
+      ['module_root', 'build', 'default', 'bindings'],
+      // Production "Release" buildtype binary (meh...)
+      ['module_root', 'compiled', 'version', 'platform', 'arch', 'bindings'],
+      // node-qbs builds
+      ['module_root', 'addon-build', 'release', 'install-root', 'bindings'],
+      ['module_root', 'addon-build', 'debug', 'install-root', 'bindings'],
+      ['module_root', 'addon-build', 'default', 'install-root', 'bindings'],
+      // node-pre-gyp path ./lib/binding/{node_abi}-{platform}-{arch}
+      ['module_root', 'lib', 'binding', 'nodePreGyp', 'bindings']
+    ]
+  };
+
+/**
+ * The main `bindings()` function loads the compiled bindings for a given module.
+ * It uses V8's Error API to determine the parent filename that this function is
+ * being invoked from, which is then used to find the root directory.
+ */
+
+function bindings(opts) {
+  // Argument surgery
+  if (typeof opts == 'string') {
+    opts = { bindings: opts };
+  } else if (!opts) {
+    opts = {};
+  }
+
+  // maps `defaults` onto `opts` object
+  Object.keys(defaults).map(function(i) {
+    if (!(i in opts)) opts[i] = defaults[i];
+  });
+
+  // Get the module root
+  if (!opts.module_root) {
+    opts.module_root = exports.getRoot(exports.getFileName());
+  }
+
+  // Ensure the given bindings name ends with .node
+  if (path.extname(opts.bindings) != '.node') {
+    opts.bindings += '.node';
+  }
+
+  // https://github.com/webpack/webpack/issues/4175#issuecomment-342931035
+  var requireFunc =
+    typeof __webpack_require__ === 'function'
+      ? __non_webpack_require__
+      : require;
+
+  var tries = [],
+    i = 0,
+    l = opts.try.length,
+    n,
+    b,
+    err;
+
+  for (; i < l; i++) {
+    n = join.apply(
+      null,
+      opts.try[i].map(function(p) {
+        return opts[p] || p;
+      })
+    );
+    tries.push(n);
+    try {
+      b = opts.path ? requireFunc.resolve(n) : requireFunc(n);
+      if (!opts.path) {
+        b.path = n;
+      }
+      return b;
+    } catch (e) {
+      if (e.code !== 'MODULE_NOT_FOUND' &&
+          e.code !== 'QUALIFIED_PATH_RESOLUTION_FAILED' &&
+          !/not find/i.test(e.message)) {
+        throw e;
+      }
+    }
+  }
+
+  err = new Error(
+    'Could not locate the bindings file. Tried:\n' +
+      tries
+        .map(function(a) {
+          return opts.arrow + a;
+        })
+        .join('\n')
+  );
+  err.tries = tries;
+  throw err;
+}
+module.exports = exports = bindings;
+
+/**
+ * Gets the filename of the JavaScript file that invokes this function.
+ * Used to help find the root directory of a module.
+ * Optionally accepts an filename argument to skip when searching for the invoking filename
+ */
+
+exports.getFileName = function getFileName(calling_file) {
+  var origPST = Error.prepareStackTrace,
+    origSTL = Error.stackTraceLimit,
+    dummy = {},
+    fileName;
+
+  Error.stackTraceLimit = 10;
+
+  Error.prepareStackTrace = function(e, st) {
+    for (var i = 0, l = st.length; i < l; i++) {
+      fileName = st[i].getFileName();
+      if (fileName !== __filename) {
+        if (calling_file) {
+          if (fileName !== calling_file) {
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+    }
+  };
+
+  // run the 'prepareStackTrace' function above
+  Error.captureStackTrace(dummy);
+  dummy.stack;
+
+  // cleanup
+  Error.prepareStackTrace = origPST;
+  Error.stackTraceLimit = origSTL;
+
+  // handle filename that starts with "file://"
+  var fileSchema = 'file://';
+  if (fileName.indexOf(fileSchema) === 0) {
+    fileName = fileURLToPath(fileName);
+  }
+
+  return fileName;
+};
+
+/**
+ * Gets the root directory of a module, given an arbitrary filename
+ * somewhere in the module tree. The "root directory" is the directory
+ * containing the `package.json` file.
+ *
+ *   In:  /home/nate/node-native-module/lib/index.js
+ *   Out: /home/nate/node-native-module
+ */
+
+exports.getRoot = function getRoot(file) {
+  var dir = dirname(file),
+    prev;
+  while (true) {
+    if (dir === '.') {
+      // Avoids an infinite loop in rare cases, like the REPL
+      dir = process.cwd();
+    }
+    if (
+      exists(join(dir, 'package.json')) ||
+      exists(join(dir, 'node_modules'))
+    ) {
+      // Found the 'package.json' file or 'node_modules' dir; we're done
+      return dir;
+    }
+    if (prev === dir) {
+      // Got to the top
+      throw new Error(
+        'Could not find module root given file: "' +
+          file +
+          '". Do you have a `package.json` file? '
+      );
+    }
+    // Try the parent dir next
+    prev = dir;
+    dir = join(dir, '..');
+  }
+};
+
+}).call(this,require('_process'),"/node_modules/bindings/bindings.js")
+},{"_process":154,"file-uri-to-path":6,"fs":4,"path":152}],3:[function(require,module,exports){
+/**
+ * Bit twiddling hacks for JavaScript.
+ *
+ * Author: Mikola Lysenko
+ *
+ * Ported from Stanford bit twiddling hack library:
+ *    http://graphics.stanford.edu/~seander/bithacks.html
+ */
+
+"use strict"; "use restrict";
+
+//Number of bits in an integer
+var INT_BITS = 32;
+
+//Constants
+exports.INT_BITS  = INT_BITS;
+exports.INT_MAX   =  0x7fffffff;
+exports.INT_MIN   = -1<<(INT_BITS-1);
+
+//Returns -1, 0, +1 depending on sign of x
+exports.sign = function(v) {
+  return (v > 0) - (v < 0);
+}
+
+//Computes absolute value of integer
+exports.abs = function(v) {
+  var mask = v >> (INT_BITS-1);
+  return (v ^ mask) - mask;
+}
+
+//Computes minimum of integers x and y
+exports.min = function(x, y) {
+  return y ^ ((x ^ y) & -(x < y));
+}
+
+//Computes maximum of integers x and y
+exports.max = function(x, y) {
+  return x ^ ((x ^ y) & -(x < y));
+}
+
+//Checks if a number is a power of two
+exports.isPow2 = function(v) {
+  return !(v & (v-1)) && (!!v);
+}
+
+//Computes log base 2 of v
+exports.log2 = function(v) {
+  var r, shift;
+  r =     (v > 0xFFFF) << 4; v >>>= r;
+  shift = (v > 0xFF  ) << 3; v >>>= shift; r |= shift;
+  shift = (v > 0xF   ) << 2; v >>>= shift; r |= shift;
+  shift = (v > 0x3   ) << 1; v >>>= shift; r |= shift;
+  return r | (v >> 1);
+}
+
+//Computes log base 10 of v
+exports.log10 = function(v) {
+  return  (v >= 1000000000) ? 9 : (v >= 100000000) ? 8 : (v >= 10000000) ? 7 :
+          (v >= 1000000) ? 6 : (v >= 100000) ? 5 : (v >= 10000) ? 4 :
+          (v >= 1000) ? 3 : (v >= 100) ? 2 : (v >= 10) ? 1 : 0;
+}
+
+//Counts number of bits
+exports.popCount = function(v) {
+  v = v - ((v >>> 1) & 0x55555555);
+  v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
+  return ((v + (v >>> 4) & 0xF0F0F0F) * 0x1010101) >>> 24;
+}
+
+//Counts number of trailing zeros
+function countTrailingZeros(v) {
+  var c = 32;
+  v &= -v;
+  if (v) c--;
+  if (v & 0x0000FFFF) c -= 16;
+  if (v & 0x00FF00FF) c -= 8;
+  if (v & 0x0F0F0F0F) c -= 4;
+  if (v & 0x33333333) c -= 2;
+  if (v & 0x55555555) c -= 1;
+  return c;
+}
+exports.countTrailingZeros = countTrailingZeros;
+
+//Rounds to next power of 2
+exports.nextPow2 = function(v) {
+  v += v === 0;
+  --v;
+  v |= v >>> 1;
+  v |= v >>> 2;
+  v |= v >>> 4;
+  v |= v >>> 8;
+  v |= v >>> 16;
+  return v + 1;
+}
+
+//Rounds down to previous power of 2
+exports.prevPow2 = function(v) {
+  v |= v >>> 1;
+  v |= v >>> 2;
+  v |= v >>> 4;
+  v |= v >>> 8;
+  v |= v >>> 16;
+  return v - (v>>>1);
+}
+
+//Computes parity of word
+exports.parity = function(v) {
+  v ^= v >>> 16;
+  v ^= v >>> 8;
+  v ^= v >>> 4;
+  v &= 0xf;
+  return (0x6996 >>> v) & 1;
+}
+
+var REVERSE_TABLE = new Array(256);
+
+(function(tab) {
+  for(var i=0; i<256; ++i) {
+    var v = i, r = i, s = 7;
+    for (v >>>= 1; v; v >>>= 1) {
+      r <<= 1;
+      r |= v & 1;
+      --s;
+    }
+    tab[i] = (r << s) & 0xff;
+  }
+})(REVERSE_TABLE);
+
+//Reverse bits in a 32 bit word
+exports.reverse = function(v) {
+  return  (REVERSE_TABLE[ v         & 0xff] << 24) |
+          (REVERSE_TABLE[(v >>> 8)  & 0xff] << 16) |
+          (REVERSE_TABLE[(v >>> 16) & 0xff] << 8)  |
+           REVERSE_TABLE[(v >>> 24) & 0xff];
+}
+
+//Interleave bits of 2 coordinates with 16 bits.  Useful for fast quadtree codes
+exports.interleave2 = function(x, y) {
+  x &= 0xFFFF;
+  x = (x | (x << 8)) & 0x00FF00FF;
+  x = (x | (x << 4)) & 0x0F0F0F0F;
+  x = (x | (x << 2)) & 0x33333333;
+  x = (x | (x << 1)) & 0x55555555;
+
+  y &= 0xFFFF;
+  y = (y | (y << 8)) & 0x00FF00FF;
+  y = (y | (y << 4)) & 0x0F0F0F0F;
+  y = (y | (y << 2)) & 0x33333333;
+  y = (y | (y << 1)) & 0x55555555;
+
+  return x | (y << 1);
+}
+
+//Extracts the nth interleaved component
+exports.deinterleave2 = function(v, n) {
+  v = (v >>> n) & 0x55555555;
+  v = (v | (v >>> 1))  & 0x33333333;
+  v = (v | (v >>> 2))  & 0x0F0F0F0F;
+  v = (v | (v >>> 4))  & 0x00FF00FF;
+  v = (v | (v >>> 16)) & 0x000FFFF;
+  return (v << 16) >> 16;
+}
+
+
+//Interleave bits of 3 coordinates, each with 10 bits.  Useful for fast octree codes
+exports.interleave3 = function(x, y, z) {
+  x &= 0x3FF;
+  x  = (x | (x<<16)) & 4278190335;
+  x  = (x | (x<<8))  & 251719695;
+  x  = (x | (x<<4))  & 3272356035;
+  x  = (x | (x<<2))  & 1227133513;
+
+  y &= 0x3FF;
+  y  = (y | (y<<16)) & 4278190335;
+  y  = (y | (y<<8))  & 251719695;
+  y  = (y | (y<<4))  & 3272356035;
+  y  = (y | (y<<2))  & 1227133513;
+  x |= (y << 1);
+  
+  z &= 0x3FF;
+  z  = (z | (z<<16)) & 4278190335;
+  z  = (z | (z<<8))  & 251719695;
+  z  = (z | (z<<4))  & 3272356035;
+  z  = (z | (z<<2))  & 1227133513;
+  
+  return x | (z << 2);
+}
+
+//Extracts nth interleaved component of a 3-tuple
+exports.deinterleave3 = function(v, n) {
+  v = (v >>> n)       & 1227133513;
+  v = (v | (v>>>2))   & 3272356035;
+  v = (v | (v>>>4))   & 251719695;
+  v = (v | (v>>>8))   & 4278190335;
+  v = (v | (v>>>16))  & 0x3FF;
+  return (v<<22)>>22;
+}
+
+//Computes next combination in colexicographic order (this is mistakenly called nextPermutation on the bit twiddling hacks page)
+exports.nextCombination = function(v) {
+  var t = v | (v - 1);
+  return (t + 1) | (((~t & -~t) - 1) >>> (countTrailingZeros(v) + 1));
+}
+
+
+},{}],4:[function(require,module,exports){
+
+},{}],5:[function(require,module,exports){
+(function (Buffer){
+/*!
+ * The buffer module from node.js, for the browser.
+ *
+ * @author   Feross Aboukhadijeh <https://feross.org>
+ * @license  MIT
+ */
+/* eslint-disable no-proto */
+
+'use strict'
+
+var base64 = require('base64-js')
+var ieee754 = require('ieee754')
+
+exports.Buffer = Buffer
+exports.SlowBuffer = SlowBuffer
+exports.INSPECT_MAX_BYTES = 50
+
+var K_MAX_LENGTH = 0x7fffffff
+exports.kMaxLength = K_MAX_LENGTH
+
+/**
+ * If `Buffer.TYPED_ARRAY_SUPPORT`:
+ *   === true    Use Uint8Array implementation (fastest)
+ *   === false   Print warning and recommend using `buffer` v4.x which has an Object
+ *               implementation (most compatible, even IE6)
+ *
+ * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
+ * Opera 11.6+, iOS 4.2+.
+ *
+ * We report that the browser does not support typed arrays if the are not subclassable
+ * using __proto__. Firefox 4-29 lacks support for adding new properties to `Uint8Array`
+ * (See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438). IE 10 lacks support
+ * for __proto__ and has a buggy typed array implementation.
+ */
+Buffer.TYPED_ARRAY_SUPPORT = typedArraySupport()
+
+if (!Buffer.TYPED_ARRAY_SUPPORT && typeof console !== 'undefined' &&
+    typeof console.error === 'function') {
+  console.error(
+    'This browser lacks typed array (Uint8Array) support which is required by ' +
+    '`buffer` v5.x. Use `buffer` v4.x if you require old browser support.'
+  )
+}
+
+function typedArraySupport () {
+  // Can typed array instances can be augmented?
+  try {
+    var arr = new Uint8Array(1)
+    arr.__proto__ = { __proto__: Uint8Array.prototype, foo: function () { return 42 } }
+    return arr.foo() === 42
+  } catch (e) {
+    return false
+  }
+}
+
+Object.defineProperty(Buffer.prototype, 'parent', {
+  enumerable: true,
+  get: function () {
+    if (!Buffer.isBuffer(this)) return undefined
+    return this.buffer
+  }
+})
+
+Object.defineProperty(Buffer.prototype, 'offset', {
+  enumerable: true,
+  get: function () {
+    if (!Buffer.isBuffer(this)) return undefined
+    return this.byteOffset
+  }
+})
+
+function createBuffer (length) {
+  if (length > K_MAX_LENGTH) {
+    throw new RangeError('The value "' + length + '" is invalid for option "size"')
+  }
+  // Return an augmented `Uint8Array` instance
+  var buf = new Uint8Array(length)
+  buf.__proto__ = Buffer.prototype
+  return buf
+}
+
+/**
+ * The Buffer constructor returns instances of `Uint8Array` that have their
+ * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
+ * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
+ * and the `Uint8Array` methods. Square bracket notation works as expected -- it
+ * returns a single octet.
+ *
+ * The `Uint8Array` prototype remains unmodified.
+ */
+
+function Buffer (arg, encodingOrOffset, length) {
+  // Common case.
+  if (typeof arg === 'number') {
+    if (typeof encodingOrOffset === 'string') {
+      throw new TypeError(
+        'The "string" argument must be of type string. Received type number'
+      )
+    }
+    return allocUnsafe(arg)
+  }
+  return from(arg, encodingOrOffset, length)
+}
+
+// Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
+if (typeof Symbol !== 'undefined' && Symbol.species != null &&
+    Buffer[Symbol.species] === Buffer) {
+  Object.defineProperty(Buffer, Symbol.species, {
+    value: null,
+    configurable: true,
+    enumerable: false,
+    writable: false
+  })
+}
+
+Buffer.poolSize = 8192 // not used by this implementation
+
+function from (value, encodingOrOffset, length) {
+  if (typeof value === 'string') {
+    return fromString(value, encodingOrOffset)
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    return fromArrayLike(value)
+  }
+
+  if (value == null) {
+    throw TypeError(
+      'The first argument must be one of type string, Buffer, ArrayBuffer, Array, ' +
+      'or Array-like Object. Received type ' + (typeof value)
+    )
+  }
+
+  if (isInstance(value, ArrayBuffer) ||
+      (value && isInstance(value.buffer, ArrayBuffer))) {
+    return fromArrayBuffer(value, encodingOrOffset, length)
+  }
+
+  if (typeof value === 'number') {
+    throw new TypeError(
+      'The "value" argument must not be of type number. Received type number'
+    )
+  }
+
+  var valueOf = value.valueOf && value.valueOf()
+  if (valueOf != null && valueOf !== value) {
+    return Buffer.from(valueOf, encodingOrOffset, length)
+  }
+
+  var b = fromObject(value)
+  if (b) return b
+
+  if (typeof Symbol !== 'undefined' && Symbol.toPrimitive != null &&
+      typeof value[Symbol.toPrimitive] === 'function') {
+    return Buffer.from(
+      value[Symbol.toPrimitive]('string'), encodingOrOffset, length
+    )
+  }
+
+  throw new TypeError(
+    'The first argument must be one of type string, Buffer, ArrayBuffer, Array, ' +
+    'or Array-like Object. Received type ' + (typeof value)
+  )
+}
+
+/**
+ * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
+ * if value is a number.
+ * Buffer.from(str[, encoding])
+ * Buffer.from(array)
+ * Buffer.from(buffer)
+ * Buffer.from(arrayBuffer[, byteOffset[, length]])
+ **/
+Buffer.from = function (value, encodingOrOffset, length) {
+  return from(value, encodingOrOffset, length)
+}
+
+// Note: Change prototype *after* Buffer.from is defined to workaround Chrome bug:
+// https://github.com/feross/buffer/pull/148
+Buffer.prototype.__proto__ = Uint8Array.prototype
+Buffer.__proto__ = Uint8Array
+
+function assertSize (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('"size" argument must be of type number')
+  } else if (size < 0) {
+    throw new RangeError('The value "' + size + '" is invalid for option "size"')
+  }
+}
+
+function alloc (size, fill, encoding) {
+  assertSize(size)
+  if (size <= 0) {
+    return createBuffer(size)
+  }
+  if (fill !== undefined) {
+    // Only pay attention to encoding if it's a string. This
+    // prevents accidentally sending in a number that would
+    // be interpretted as a start offset.
+    return typeof encoding === 'string'
+      ? createBuffer(size).fill(fill, encoding)
+      : createBuffer(size).fill(fill)
+  }
+  return createBuffer(size)
+}
+
+/**
+ * Creates a new filled Buffer instance.
+ * alloc(size[, fill[, encoding]])
+ **/
+Buffer.alloc = function (size, fill, encoding) {
+  return alloc(size, fill, encoding)
+}
+
+function allocUnsafe (size) {
+  assertSize(size)
+  return createBuffer(size < 0 ? 0 : checked(size) | 0)
+}
+
+/**
+ * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
+ * */
+Buffer.allocUnsafe = function (size) {
+  return allocUnsafe(size)
+}
+/**
+ * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
+ */
+Buffer.allocUnsafeSlow = function (size) {
+  return allocUnsafe(size)
+}
+
+function fromString (string, encoding) {
+  if (typeof encoding !== 'string' || encoding === '') {
+    encoding = 'utf8'
+  }
+
+  if (!Buffer.isEncoding(encoding)) {
+    throw new TypeError('Unknown encoding: ' + encoding)
+  }
+
+  var length = byteLength(string, encoding) | 0
+  var buf = createBuffer(length)
+
+  var actual = buf.write(string, encoding)
+
+  if (actual !== length) {
+    // Writing a hex string, for example, that contains invalid characters will
+    // cause everything after the first invalid character to be ignored. (e.g.
+    // 'abxxcd' will be treated as 'ab')
+    buf = buf.slice(0, actual)
+  }
+
+  return buf
+}
+
+function fromArrayLike (array) {
+  var length = array.length < 0 ? 0 : checked(array.length) | 0
+  var buf = createBuffer(length)
+  for (var i = 0; i < length; i += 1) {
+    buf[i] = array[i] & 255
+  }
+  return buf
+}
+
+function fromArrayBuffer (array, byteOffset, length) {
+  if (byteOffset < 0 || array.byteLength < byteOffset) {
+    throw new RangeError('"offset" is outside of buffer bounds')
+  }
+
+  if (array.byteLength < byteOffset + (length || 0)) {
+    throw new RangeError('"length" is outside of buffer bounds')
+  }
+
+  var buf
+  if (byteOffset === undefined && length === undefined) {
+    buf = new Uint8Array(array)
+  } else if (length === undefined) {
+    buf = new Uint8Array(array, byteOffset)
+  } else {
+    buf = new Uint8Array(array, byteOffset, length)
+  }
+
+  // Return an augmented `Uint8Array` instance
+  buf.__proto__ = Buffer.prototype
+  return buf
+}
+
+function fromObject (obj) {
+  if (Buffer.isBuffer(obj)) {
+    var len = checked(obj.length) | 0
+    var buf = createBuffer(len)
+
+    if (buf.length === 0) {
+      return buf
+    }
+
+    obj.copy(buf, 0, 0, len)
+    return buf
+  }
+
+  if (obj.length !== undefined) {
+    if (typeof obj.length !== 'number' || numberIsNaN(obj.length)) {
+      return createBuffer(0)
+    }
+    return fromArrayLike(obj)
+  }
+
+  if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+    return fromArrayLike(obj.data)
+  }
+}
+
+function checked (length) {
+  // Note: cannot use `length < K_MAX_LENGTH` here because that fails when
+  // length is NaN (which is otherwise coerced to zero.)
+  if (length >= K_MAX_LENGTH) {
+    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
+                         'size: 0x' + K_MAX_LENGTH.toString(16) + ' bytes')
+  }
+  return length | 0
+}
+
+function SlowBuffer (length) {
+  if (+length != length) { // eslint-disable-line eqeqeq
+    length = 0
+  }
+  return Buffer.alloc(+length)
+}
+
+Buffer.isBuffer = function isBuffer (b) {
+  return b != null && b._isBuffer === true &&
+    b !== Buffer.prototype // so Buffer.isBuffer(Buffer.prototype) will be false
+}
+
+Buffer.compare = function compare (a, b) {
+  if (isInstance(a, Uint8Array)) a = Buffer.from(a, a.offset, a.byteLength)
+  if (isInstance(b, Uint8Array)) b = Buffer.from(b, b.offset, b.byteLength)
+  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
+    throw new TypeError(
+      'The "buf1", "buf2" arguments must be one of type Buffer or Uint8Array'
+    )
+  }
+
+  if (a === b) return 0
+
+  var x = a.length
+  var y = b.length
+
+  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+    if (a[i] !== b[i]) {
+      x = a[i]
+      y = b[i]
+      break
+    }
+  }
+
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
+}
+
+Buffer.isEncoding = function isEncoding (encoding) {
+  switch (String(encoding).toLowerCase()) {
+    case 'hex':
+    case 'utf8':
+    case 'utf-8':
+    case 'ascii':
+    case 'latin1':
+    case 'binary':
+    case 'base64':
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+      return true
+    default:
+      return false
+  }
+}
+
+Buffer.concat = function concat (list, length) {
+  if (!Array.isArray(list)) {
+    throw new TypeError('"list" argument must be an Array of Buffers')
+  }
+
+  if (list.length === 0) {
+    return Buffer.alloc(0)
+  }
+
+  var i
+  if (length === undefined) {
+    length = 0
+    for (i = 0; i < list.length; ++i) {
+      length += list[i].length
+    }
+  }
+
+  var buffer = Buffer.allocUnsafe(length)
+  var pos = 0
+  for (i = 0; i < list.length; ++i) {
+    var buf = list[i]
+    if (isInstance(buf, Uint8Array)) {
+      buf = Buffer.from(buf)
+    }
+    if (!Buffer.isBuffer(buf)) {
+      throw new TypeError('"list" argument must be an Array of Buffers')
+    }
+    buf.copy(buffer, pos)
+    pos += buf.length
+  }
+  return buffer
+}
+
+function byteLength (string, encoding) {
+  if (Buffer.isBuffer(string)) {
+    return string.length
+  }
+  if (ArrayBuffer.isView(string) || isInstance(string, ArrayBuffer)) {
+    return string.byteLength
+  }
+  if (typeof string !== 'string') {
+    throw new TypeError(
+      'The "string" argument must be one of type string, Buffer, or ArrayBuffer. ' +
+      'Received type ' + typeof string
+    )
+  }
+
+  var len = string.length
+  var mustMatch = (arguments.length > 2 && arguments[2] === true)
+  if (!mustMatch && len === 0) return 0
+
+  // Use a for loop to avoid recursion
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'ascii':
+      case 'latin1':
+      case 'binary':
+        return len
+      case 'utf8':
+      case 'utf-8':
+        return utf8ToBytes(string).length
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return len * 2
+      case 'hex':
+        return len >>> 1
+      case 'base64':
+        return base64ToBytes(string).length
+      default:
+        if (loweredCase) {
+          return mustMatch ? -1 : utf8ToBytes(string).length // assume utf8
+        }
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+Buffer.byteLength = byteLength
+
+function slowToString (encoding, start, end) {
+  var loweredCase = false
+
+  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
+  // property of a typed array.
+
+  // This behaves neither like String nor Uint8Array in that we set start/end
+  // to their upper/lower bounds if the value passed is out of range.
+  // undefined is handled specially as per ECMA-262 6th Edition,
+  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
+  if (start === undefined || start < 0) {
+    start = 0
+  }
+  // Return early if start > this.length. Done here to prevent potential uint32
+  // coercion fail below.
+  if (start > this.length) {
+    return ''
+  }
+
+  if (end === undefined || end > this.length) {
+    end = this.length
+  }
+
+  if (end <= 0) {
+    return ''
+  }
+
+  // Force coersion to uint32. This will also coerce falsey/NaN values to 0.
+  end >>>= 0
+  start >>>= 0
+
+  if (end <= start) {
+    return ''
+  }
+
+  if (!encoding) encoding = 'utf8'
+
+  while (true) {
+    switch (encoding) {
+      case 'hex':
+        return hexSlice(this, start, end)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Slice(this, start, end)
+
+      case 'ascii':
+        return asciiSlice(this, start, end)
+
+      case 'latin1':
+      case 'binary':
+        return latin1Slice(this, start, end)
+
+      case 'base64':
+        return base64Slice(this, start, end)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return utf16leSlice(this, start, end)
+
+      default:
+        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = (encoding + '').toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+
+// This property is used by `Buffer.isBuffer` (and the `is-buffer` npm package)
+// to detect a Buffer instance. It's not possible to use `instanceof Buffer`
+// reliably in a browserify context because there could be multiple different
+// copies of the 'buffer' package in use. This method works even for Buffer
+// instances that were created from another copy of the `buffer` package.
+// See: https://github.com/feross/buffer/issues/154
+Buffer.prototype._isBuffer = true
+
+function swap (b, n, m) {
+  var i = b[n]
+  b[n] = b[m]
+  b[m] = i
+}
+
+Buffer.prototype.swap16 = function swap16 () {
+  var len = this.length
+  if (len % 2 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 16-bits')
+  }
+  for (var i = 0; i < len; i += 2) {
+    swap(this, i, i + 1)
+  }
+  return this
+}
+
+Buffer.prototype.swap32 = function swap32 () {
+  var len = this.length
+  if (len % 4 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 32-bits')
+  }
+  for (var i = 0; i < len; i += 4) {
+    swap(this, i, i + 3)
+    swap(this, i + 1, i + 2)
+  }
+  return this
+}
+
+Buffer.prototype.swap64 = function swap64 () {
+  var len = this.length
+  if (len % 8 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 64-bits')
+  }
+  for (var i = 0; i < len; i += 8) {
+    swap(this, i, i + 7)
+    swap(this, i + 1, i + 6)
+    swap(this, i + 2, i + 5)
+    swap(this, i + 3, i + 4)
+  }
+  return this
+}
+
+Buffer.prototype.toString = function toString () {
+  var length = this.length
+  if (length === 0) return ''
+  if (arguments.length === 0) return utf8Slice(this, 0, length)
+  return slowToString.apply(this, arguments)
+}
+
+Buffer.prototype.toLocaleString = Buffer.prototype.toString
+
+Buffer.prototype.equals = function equals (b) {
+  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
+  if (this === b) return true
+  return Buffer.compare(this, b) === 0
+}
+
+Buffer.prototype.inspect = function inspect () {
+  var str = ''
+  var max = exports.INSPECT_MAX_BYTES
+  str = this.toString('hex', 0, max).replace(/(.{2})/g, '$1 ').trim()
+  if (this.length > max) str += ' ... '
+  return '<Buffer ' + str + '>'
+}
+
+Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
+  if (isInstance(target, Uint8Array)) {
+    target = Buffer.from(target, target.offset, target.byteLength)
+  }
+  if (!Buffer.isBuffer(target)) {
+    throw new TypeError(
+      'The "target" argument must be one of type Buffer or Uint8Array. ' +
+      'Received type ' + (typeof target)
+    )
+  }
+
+  if (start === undefined) {
+    start = 0
+  }
+  if (end === undefined) {
+    end = target ? target.length : 0
+  }
+  if (thisStart === undefined) {
+    thisStart = 0
+  }
+  if (thisEnd === undefined) {
+    thisEnd = this.length
+  }
+
+  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
+    throw new RangeError('out of range index')
+  }
+
+  if (thisStart >= thisEnd && start >= end) {
+    return 0
+  }
+  if (thisStart >= thisEnd) {
+    return -1
+  }
+  if (start >= end) {
+    return 1
+  }
+
+  start >>>= 0
+  end >>>= 0
+  thisStart >>>= 0
+  thisEnd >>>= 0
+
+  if (this === target) return 0
+
+  var x = thisEnd - thisStart
+  var y = end - start
+  var len = Math.min(x, y)
+
+  var thisCopy = this.slice(thisStart, thisEnd)
+  var targetCopy = target.slice(start, end)
+
+  for (var i = 0; i < len; ++i) {
+    if (thisCopy[i] !== targetCopy[i]) {
+      x = thisCopy[i]
+      y = targetCopy[i]
+      break
+    }
+  }
+
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
+}
+
+// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
+// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
+//
+// Arguments:
+// - buffer - a Buffer to search
+// - val - a string, Buffer, or number
+// - byteOffset - an index into `buffer`; will be clamped to an int32
+// - encoding - an optional encoding, relevant is val is a string
+// - dir - true for indexOf, false for lastIndexOf
+function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
+  // Empty buffer means no match
+  if (buffer.length === 0) return -1
+
+  // Normalize byteOffset
+  if (typeof byteOffset === 'string') {
+    encoding = byteOffset
+    byteOffset = 0
+  } else if (byteOffset > 0x7fffffff) {
+    byteOffset = 0x7fffffff
+  } else if (byteOffset < -0x80000000) {
+    byteOffset = -0x80000000
+  }
+  byteOffset = +byteOffset // Coerce to Number.
+  if (numberIsNaN(byteOffset)) {
+    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
+    byteOffset = dir ? 0 : (buffer.length - 1)
+  }
+
+  // Normalize byteOffset: negative offsets start from the end of the buffer
+  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
+  if (byteOffset >= buffer.length) {
+    if (dir) return -1
+    else byteOffset = buffer.length - 1
+  } else if (byteOffset < 0) {
+    if (dir) byteOffset = 0
+    else return -1
+  }
+
+  // Normalize val
+  if (typeof val === 'string') {
+    val = Buffer.from(val, encoding)
+  }
+
+  // Finally, search either indexOf (if dir is true) or lastIndexOf
+  if (Buffer.isBuffer(val)) {
+    // Special case: looking for empty string/buffer always fails
+    if (val.length === 0) {
+      return -1
+    }
+    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
+  } else if (typeof val === 'number') {
+    val = val & 0xFF // Search for a byte value [0-255]
+    if (typeof Uint8Array.prototype.indexOf === 'function') {
+      if (dir) {
+        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
+      } else {
+        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
+      }
+    }
+    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
+  }
+
+  throw new TypeError('val must be string, number or Buffer')
+}
+
+function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
+  var indexSize = 1
+  var arrLength = arr.length
+  var valLength = val.length
+
+  if (encoding !== undefined) {
+    encoding = String(encoding).toLowerCase()
+    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
+        encoding === 'utf16le' || encoding === 'utf-16le') {
+      if (arr.length < 2 || val.length < 2) {
+        return -1
+      }
+      indexSize = 2
+      arrLength /= 2
+      valLength /= 2
+      byteOffset /= 2
+    }
+  }
+
+  function read (buf, i) {
+    if (indexSize === 1) {
+      return buf[i]
+    } else {
+      return buf.readUInt16BE(i * indexSize)
+    }
+  }
+
+  var i
+  if (dir) {
+    var foundIndex = -1
+    for (i = byteOffset; i < arrLength; i++) {
+      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+        if (foundIndex === -1) foundIndex = i
+        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
+      } else {
+        if (foundIndex !== -1) i -= i - foundIndex
+        foundIndex = -1
+      }
+    }
+  } else {
+    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
+    for (i = byteOffset; i >= 0; i--) {
+      var found = true
+      for (var j = 0; j < valLength; j++) {
+        if (read(arr, i + j) !== read(val, j)) {
+          found = false
+          break
+        }
+      }
+      if (found) return i
+    }
+  }
+
+  return -1
+}
+
+Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
+  return this.indexOf(val, byteOffset, encoding) !== -1
+}
+
+Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
+}
+
+Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
+}
+
+function hexWrite (buf, string, offset, length) {
+  offset = Number(offset) || 0
+  var remaining = buf.length - offset
+  if (!length) {
+    length = remaining
+  } else {
+    length = Number(length)
+    if (length > remaining) {
+      length = remaining
+    }
+  }
+
+  var strLen = string.length
+
+  if (length > strLen / 2) {
+    length = strLen / 2
+  }
+  for (var i = 0; i < length; ++i) {
+    var parsed = parseInt(string.substr(i * 2, 2), 16)
+    if (numberIsNaN(parsed)) return i
+    buf[offset + i] = parsed
+  }
+  return i
+}
+
+function utf8Write (buf, string, offset, length) {
+  return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
+}
+
+function asciiWrite (buf, string, offset, length) {
+  return blitBuffer(asciiToBytes(string), buf, offset, length)
+}
+
+function latin1Write (buf, string, offset, length) {
+  return asciiWrite(buf, string, offset, length)
+}
+
+function base64Write (buf, string, offset, length) {
+  return blitBuffer(base64ToBytes(string), buf, offset, length)
+}
+
+function ucs2Write (buf, string, offset, length) {
+  return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
+}
+
+Buffer.prototype.write = function write (string, offset, length, encoding) {
+  // Buffer#write(string)
+  if (offset === undefined) {
+    encoding = 'utf8'
+    length = this.length
+    offset = 0
+  // Buffer#write(string, encoding)
+  } else if (length === undefined && typeof offset === 'string') {
+    encoding = offset
+    length = this.length
+    offset = 0
+  // Buffer#write(string, offset[, length][, encoding])
+  } else if (isFinite(offset)) {
+    offset = offset >>> 0
+    if (isFinite(length)) {
+      length = length >>> 0
+      if (encoding === undefined) encoding = 'utf8'
+    } else {
+      encoding = length
+      length = undefined
+    }
+  } else {
+    throw new Error(
+      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
+    )
+  }
+
+  var remaining = this.length - offset
+  if (length === undefined || length > remaining) length = remaining
+
+  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
+    throw new RangeError('Attempt to write outside buffer bounds')
+  }
+
+  if (!encoding) encoding = 'utf8'
+
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'hex':
+        return hexWrite(this, string, offset, length)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Write(this, string, offset, length)
+
+      case 'ascii':
+        return asciiWrite(this, string, offset, length)
+
+      case 'latin1':
+      case 'binary':
+        return latin1Write(this, string, offset, length)
+
+      case 'base64':
+        // Warning: maxLength not taken into account in base64Write
+        return base64Write(this, string, offset, length)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return ucs2Write(this, string, offset, length)
+
+      default:
+        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+
+Buffer.prototype.toJSON = function toJSON () {
+  return {
+    type: 'Buffer',
+    data: Array.prototype.slice.call(this._arr || this, 0)
+  }
+}
+
+function base64Slice (buf, start, end) {
+  if (start === 0 && end === buf.length) {
+    return base64.fromByteArray(buf)
+  } else {
+    return base64.fromByteArray(buf.slice(start, end))
+  }
+}
+
+function utf8Slice (buf, start, end) {
+  end = Math.min(buf.length, end)
+  var res = []
+
+  var i = start
+  while (i < end) {
+    var firstByte = buf[i]
+    var codePoint = null
+    var bytesPerSequence = (firstByte > 0xEF) ? 4
+      : (firstByte > 0xDF) ? 3
+        : (firstByte > 0xBF) ? 2
+          : 1
+
+    if (i + bytesPerSequence <= end) {
+      var secondByte, thirdByte, fourthByte, tempCodePoint
+
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
+    }
+
+    if (codePoint === null) {
+      // we did not generate a valid codePoint so insert a
+      // replacement char (U+FFFD) and advance only 1 byte
+      codePoint = 0xFFFD
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
+    i += bytesPerSequence
+  }
+
+  return decodeCodePointsArray(res)
+}
+
+// Based on http://stackoverflow.com/a/22747272/680742, the browser with
+// the lowest limit is Chrome, with 0x10000 args.
+// We go 1 magnitude less, for safety
+var MAX_ARGUMENTS_LENGTH = 0x1000
+
+function decodeCodePointsArray (codePoints) {
+  var len = codePoints.length
+  if (len <= MAX_ARGUMENTS_LENGTH) {
+    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+  }
+
+  // Decode in chunks to avoid "call stack size exceeded".
+  var res = ''
+  var i = 0
+  while (i < len) {
+    res += String.fromCharCode.apply(
+      String,
+      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
+    )
+  }
+  return res
+}
+
+function asciiSlice (buf, start, end) {
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; ++i) {
+    ret += String.fromCharCode(buf[i] & 0x7F)
+  }
+  return ret
+}
+
+function latin1Slice (buf, start, end) {
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; ++i) {
+    ret += String.fromCharCode(buf[i])
+  }
+  return ret
+}
+
+function hexSlice (buf, start, end) {
+  var len = buf.length
+
+  if (!start || start < 0) start = 0
+  if (!end || end < 0 || end > len) end = len
+
+  var out = ''
+  for (var i = start; i < end; ++i) {
+    out += toHex(buf[i])
+  }
+  return out
+}
+
+function utf16leSlice (buf, start, end) {
+  var bytes = buf.slice(start, end)
+  var res = ''
+  for (var i = 0; i < bytes.length; i += 2) {
+    res += String.fromCharCode(bytes[i] + (bytes[i + 1] * 256))
+  }
+  return res
+}
+
+Buffer.prototype.slice = function slice (start, end) {
+  var len = this.length
+  start = ~~start
+  end = end === undefined ? len : ~~end
+
+  if (start < 0) {
+    start += len
+    if (start < 0) start = 0
+  } else if (start > len) {
+    start = len
+  }
+
+  if (end < 0) {
+    end += len
+    if (end < 0) end = 0
+  } else if (end > len) {
+    end = len
+  }
+
+  if (end < start) end = start
+
+  var newBuf = this.subarray(start, end)
+  // Return an augmented `Uint8Array` instance
+  newBuf.__proto__ = Buffer.prototype
+  return newBuf
+}
+
+/*
+ * Need to make sure that buffer isn't trying to write out of bounds.
+ */
+function checkOffset (offset, ext, length) {
+  if ((offset % 1) !== 0 || offset < 0) throw new RangeError('offset is not uint')
+  if (offset + ext > length) throw new RangeError('Trying to access beyond buffer length')
+}
+
+Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100)) {
+    val += this[offset + i] * mul
+  }
+
+  return val
+}
+
+Buffer.prototype.readUIntBE = function readUIntBE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) {
+    checkOffset(offset, byteLength, this.length)
+  }
+
+  var val = this[offset + --byteLength]
+  var mul = 1
+  while (byteLength > 0 && (mul *= 0x100)) {
+    val += this[offset + --byteLength] * mul
+  }
+
+  return val
+}
+
+Buffer.prototype.readUInt8 = function readUInt8 (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 1, this.length)
+  return this[offset]
+}
+
+Buffer.prototype.readUInt16LE = function readUInt16LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  return this[offset] | (this[offset + 1] << 8)
+}
+
+Buffer.prototype.readUInt16BE = function readUInt16BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  return (this[offset] << 8) | this[offset + 1]
+}
+
+Buffer.prototype.readUInt32LE = function readUInt32LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return ((this[offset]) |
+      (this[offset + 1] << 8) |
+      (this[offset + 2] << 16)) +
+      (this[offset + 3] * 0x1000000)
+}
+
+Buffer.prototype.readUInt32BE = function readUInt32BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset] * 0x1000000) +
+    ((this[offset + 1] << 16) |
+    (this[offset + 2] << 8) |
+    this[offset + 3])
+}
+
+Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100)) {
+    val += this[offset + i] * mul
+  }
+  mul *= 0x80
+
+  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readIntBE = function readIntBE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var i = byteLength
+  var mul = 1
+  var val = this[offset + --i]
+  while (i > 0 && (mul *= 0x100)) {
+    val += this[offset + --i] * mul
+  }
+  mul *= 0x80
+
+  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readInt8 = function readInt8 (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 1, this.length)
+  if (!(this[offset] & 0x80)) return (this[offset])
+  return ((0xff - this[offset] + 1) * -1)
+}
+
+Buffer.prototype.readInt16LE = function readInt16LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  var val = this[offset] | (this[offset + 1] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
+}
+
+Buffer.prototype.readInt16BE = function readInt16BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  var val = this[offset + 1] | (this[offset] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
+}
+
+Buffer.prototype.readInt32LE = function readInt32LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset]) |
+    (this[offset + 1] << 8) |
+    (this[offset + 2] << 16) |
+    (this[offset + 3] << 24)
+}
+
+Buffer.prototype.readInt32BE = function readInt32BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset] << 24) |
+    (this[offset + 1] << 16) |
+    (this[offset + 2] << 8) |
+    (this[offset + 3])
+}
+
+Buffer.prototype.readFloatLE = function readFloatLE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, true, 23, 4)
+}
+
+Buffer.prototype.readFloatBE = function readFloatBE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, false, 23, 4)
+}
+
+Buffer.prototype.readDoubleLE = function readDoubleLE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, true, 52, 8)
+}
+
+Buffer.prototype.readDoubleBE = function readDoubleBE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, false, 52, 8)
+}
+
+function checkInt (buf, value, offset, ext, max, min) {
+  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
+  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+}
+
+Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
+
+  var mul = 1
+  var i = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100)) {
+    this[offset + i] = (value / mul) & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100)) {
+    this[offset + i] = (value / mul) & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
+  this[offset] = (value & 0xff)
+  return offset + 1
+}
+
+Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+  this[offset] = (value & 0xff)
+  this[offset + 1] = (value >>> 8)
+  return offset + 2
+}
+
+Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+  this[offset] = (value >>> 8)
+  this[offset + 1] = (value & 0xff)
+  return offset + 2
+}
+
+Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+  this[offset + 3] = (value >>> 24)
+  this[offset + 2] = (value >>> 16)
+  this[offset + 1] = (value >>> 8)
+  this[offset] = (value & 0xff)
+  return offset + 4
+}
+
+Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+  this[offset] = (value >>> 24)
+  this[offset + 1] = (value >>> 16)
+  this[offset + 2] = (value >>> 8)
+  this[offset + 3] = (value & 0xff)
+  return offset + 4
+}
+
+Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    var limit = Math.pow(2, (8 * byteLength) - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
+  }
+
+  var i = 0
+  var mul = 1
+  var sub = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
+      sub = 1
+    }
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    var limit = Math.pow(2, (8 * byteLength) - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  var sub = 0
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
+      sub = 1
+    }
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
+  if (value < 0) value = 0xff + value + 1
+  this[offset] = (value & 0xff)
+  return offset + 1
+}
+
+Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  this[offset] = (value & 0xff)
+  this[offset + 1] = (value >>> 8)
+  return offset + 2
+}
+
+Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  this[offset] = (value >>> 8)
+  this[offset + 1] = (value & 0xff)
+  return offset + 2
+}
+
+Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  this[offset] = (value & 0xff)
+  this[offset + 1] = (value >>> 8)
+  this[offset + 2] = (value >>> 16)
+  this[offset + 3] = (value >>> 24)
+  return offset + 4
+}
+
+Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  if (value < 0) value = 0xffffffff + value + 1
+  this[offset] = (value >>> 24)
+  this[offset + 1] = (value >>> 16)
+  this[offset + 2] = (value >>> 8)
+  this[offset + 3] = (value & 0xff)
+  return offset + 4
+}
+
+function checkIEEE754 (buf, value, offset, ext, max, min) {
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+  if (offset < 0) throw new RangeError('Index out of range')
+}
+
+function writeFloat (buf, value, offset, littleEndian, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkIEEE754(buf, value, offset, 4, 3.4028234663852886e+38, -3.4028234663852886e+38)
+  }
+  ieee754.write(buf, value, offset, littleEndian, 23, 4)
+  return offset + 4
+}
+
+Buffer.prototype.writeFloatLE = function writeFloatLE (value, offset, noAssert) {
+  return writeFloat(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeFloatBE = function writeFloatBE (value, offset, noAssert) {
+  return writeFloat(this, value, offset, false, noAssert)
+}
+
+function writeDouble (buf, value, offset, littleEndian, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkIEEE754(buf, value, offset, 8, 1.7976931348623157E+308, -1.7976931348623157E+308)
+  }
+  ieee754.write(buf, value, offset, littleEndian, 52, 8)
+  return offset + 8
+}
+
+Buffer.prototype.writeDoubleLE = function writeDoubleLE (value, offset, noAssert) {
+  return writeDouble(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert) {
+  return writeDouble(this, value, offset, false, noAssert)
+}
+
+// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
+Buffer.prototype.copy = function copy (target, targetStart, start, end) {
+  if (!Buffer.isBuffer(target)) throw new TypeError('argument should be a Buffer')
+  if (!start) start = 0
+  if (!end && end !== 0) end = this.length
+  if (targetStart >= target.length) targetStart = target.length
+  if (!targetStart) targetStart = 0
+  if (end > 0 && end < start) end = start
+
+  // Copy 0 bytes; we're done
+  if (end === start) return 0
+  if (target.length === 0 || this.length === 0) return 0
+
+  // Fatal error conditions
+  if (targetStart < 0) {
+    throw new RangeError('targetStart out of bounds')
+  }
+  if (start < 0 || start >= this.length) throw new RangeError('Index out of range')
+  if (end < 0) throw new RangeError('sourceEnd out of bounds')
+
+  // Are we oob?
+  if (end > this.length) end = this.length
+  if (target.length - targetStart < end - start) {
+    end = target.length - targetStart + start
+  }
+
+  var len = end - start
+
+  if (this === target && typeof Uint8Array.prototype.copyWithin === 'function') {
+    // Use built-in when available, missing from IE11
+    this.copyWithin(targetStart, start, end)
+  } else if (this === target && start < targetStart && targetStart < end) {
+    // descending copy from end
+    for (var i = len - 1; i >= 0; --i) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else {
+    Uint8Array.prototype.set.call(
+      target,
+      this.subarray(start, end),
+      targetStart
+    )
+  }
+
+  return len
+}
+
+// Usage:
+//    buffer.fill(number[, offset[, end]])
+//    buffer.fill(buffer[, offset[, end]])
+//    buffer.fill(string[, offset[, end]][, encoding])
+Buffer.prototype.fill = function fill (val, start, end, encoding) {
+  // Handle string cases:
+  if (typeof val === 'string') {
+    if (typeof start === 'string') {
+      encoding = start
+      start = 0
+      end = this.length
+    } else if (typeof end === 'string') {
+      encoding = end
+      end = this.length
+    }
+    if (encoding !== undefined && typeof encoding !== 'string') {
+      throw new TypeError('encoding must be a string')
+    }
+    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
+      throw new TypeError('Unknown encoding: ' + encoding)
+    }
+    if (val.length === 1) {
+      var code = val.charCodeAt(0)
+      if ((encoding === 'utf8' && code < 128) ||
+          encoding === 'latin1') {
+        // Fast path: If `val` fits into a single byte, use that numeric value.
+        val = code
+      }
+    }
+  } else if (typeof val === 'number') {
+    val = val & 255
+  }
+
+  // Invalid ranges are not set to a default, so can range check early.
+  if (start < 0 || this.length < start || this.length < end) {
+    throw new RangeError('Out of range index')
+  }
+
+  if (end <= start) {
+    return this
+  }
+
+  start = start >>> 0
+  end = end === undefined ? this.length : end >>> 0
+
+  if (!val) val = 0
+
+  var i
+  if (typeof val === 'number') {
+    for (i = start; i < end; ++i) {
+      this[i] = val
+    }
+  } else {
+    var bytes = Buffer.isBuffer(val)
+      ? val
+      : Buffer.from(val, encoding)
+    var len = bytes.length
+    if (len === 0) {
+      throw new TypeError('The value "' + val +
+        '" is invalid for argument "value"')
+    }
+    for (i = 0; i < end - start; ++i) {
+      this[i + start] = bytes[i % len]
+    }
+  }
+
+  return this
+}
+
+// HELPER FUNCTIONS
+// ================
+
+var INVALID_BASE64_RE = /[^+/0-9A-Za-z-_]/g
+
+function base64clean (str) {
+  // Node takes equal signs as end of the Base64 encoding
+  str = str.split('=')[0]
+  // Node strips out invalid characters like \n and \t from the string, base64-js does not
+  str = str.trim().replace(INVALID_BASE64_RE, '')
+  // Node converts strings with length < 2 to ''
+  if (str.length < 2) return ''
+  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
+  while (str.length % 4 !== 0) {
+    str = str + '='
+  }
+  return str
+}
+
+function toHex (n) {
+  if (n < 16) return '0' + n.toString(16)
+  return n.toString(16)
+}
+
+function utf8ToBytes (string, units) {
+  units = units || Infinity
+  var codePoint
+  var length = string.length
+  var leadSurrogate = null
+  var bytes = []
+
+  for (var i = 0; i < length; ++i) {
+    codePoint = string.charCodeAt(i)
+
+    // is surrogate component
+    if (codePoint > 0xD7FF && codePoint < 0xE000) {
+      // last char was a lead
+      if (!leadSurrogate) {
+        // no lead yet
+        if (codePoint > 0xDBFF) {
+          // unexpected trail
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        } else if (i + 1 === length) {
+          // unpaired lead
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
+      }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
+    } else if (leadSurrogate) {
+      // valid bmp char, but last char was a lead
+      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+    }
+
+    leadSurrogate = null
+
+    // encode utf8
+    if (codePoint < 0x80) {
+      if ((units -= 1) < 0) break
+      bytes.push(codePoint)
+    } else if (codePoint < 0x800) {
+      if ((units -= 2) < 0) break
+      bytes.push(
+        codePoint >> 0x6 | 0xC0,
+        codePoint & 0x3F | 0x80
+      )
+    } else if (codePoint < 0x10000) {
+      if ((units -= 3) < 0) break
+      bytes.push(
+        codePoint >> 0xC | 0xE0,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      )
+    } else if (codePoint < 0x110000) {
+      if ((units -= 4) < 0) break
+      bytes.push(
+        codePoint >> 0x12 | 0xF0,
+        codePoint >> 0xC & 0x3F | 0x80,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      )
+    } else {
+      throw new Error('Invalid code point')
+    }
+  }
+
+  return bytes
+}
+
+function asciiToBytes (str) {
+  var byteArray = []
+  for (var i = 0; i < str.length; ++i) {
+    // Node's code seems to be doing this and not & 0x7F..
+    byteArray.push(str.charCodeAt(i) & 0xFF)
+  }
+  return byteArray
+}
+
+function utf16leToBytes (str, units) {
+  var c, hi, lo
+  var byteArray = []
+  for (var i = 0; i < str.length; ++i) {
+    if ((units -= 2) < 0) break
+
+    c = str.charCodeAt(i)
+    hi = c >> 8
+    lo = c % 256
+    byteArray.push(lo)
+    byteArray.push(hi)
+  }
+
+  return byteArray
+}
+
+function base64ToBytes (str) {
+  return base64.toByteArray(base64clean(str))
+}
+
+function blitBuffer (src, dst, offset, length) {
+  for (var i = 0; i < length; ++i) {
+    if ((i + offset >= dst.length) || (i >= src.length)) break
+    dst[i + offset] = src[i]
+  }
+  return i
+}
+
+// ArrayBuffer or Uint8Array objects from other contexts (i.e. iframes) do not pass
+// the `instanceof` check but they should be treated as of that type.
+// See: https://github.com/feross/buffer/issues/166
+function isInstance (obj, type) {
+  return obj instanceof type ||
+    (obj != null && obj.constructor != null && obj.constructor.name != null &&
+      obj.constructor.name === type.name)
+}
+function numberIsNaN (obj) {
+  // For IE11 support
+  return obj !== obj // eslint-disable-line no-self-compare
+}
+
+}).call(this,require("buffer").Buffer)
+},{"base64-js":1,"buffer":5,"ieee754":151}],6:[function(require,module,exports){
+
+/**
+ * Module dependencies.
+ */
+
+var sep = require('path').sep || '/';
+
+/**
+ * Module exports.
+ */
+
+module.exports = fileUriToPath;
+
+/**
+ * File URI to Path function.
+ *
+ * @param {String} uri
+ * @return {String} path
+ * @api public
+ */
+
+function fileUriToPath (uri) {
+  if ('string' != typeof uri ||
+      uri.length <= 7 ||
+      'file://' != uri.substring(0, 7)) {
+    throw new TypeError('must pass in a file:// URI to convert to a file path');
+  }
+
+  var rest = decodeURI(uri.substring(7));
+  var firstSlash = rest.indexOf('/');
+  var host = rest.substring(0, firstSlash);
+  var path = rest.substring(firstSlash + 1);
+
+  // 2.  Scheme Definition
+  // As a special case, <host> can be the string "localhost" or the empty
+  // string; this is interpreted as "the machine from which the URL is
+  // being interpreted".
+  if ('localhost' == host) host = '';
+
+  if (host) {
+    host = sep + sep + host;
+  }
+
+  // 3.2  Drives, drive letters, mount points, file system root
+  // Drive letters are mapped into the top of a file URI in various ways,
+  // depending on the implementation; some applications substitute
+  // vertical bar ("|") for the colon after the drive letter, yielding
+  // "file:///c|/tmp/test.txt".  In some cases, the colon is left
+  // unchanged, as in "file:///c:/tmp/test.txt".  In other cases, the
+  // colon is simply omitted, as in "file:///c/tmp/test.txt".
+  path = path.replace(/^(.+)\|/, '$1:');
+
+  // for Windows, we need to invert the path separators from what a URI uses
+  if (sep == '\\') {
+    path = path.replace(/\//g, '\\');
+  }
+
+  if (/^.+\:/.test(path)) {
+    // has Windows drive at beginning of path
+  } else {
+    // unix path…
+    path = sep + path;
+  }
+
+  return host + path;
+}
+
+},{"path":152}],7:[function(require,module,exports){
 /**
  *
  * @param {WebGLRenderingContext} gl
@@ -289,7 +2724,7 @@ function glExtensionWiretap(extension, options) {
 }
 
 function argumentsToString(args, options) {
-  const { variables } = options;
+  const { variables, onUnrecognizedArgumentLookup } = options;
   return (Array.from(args).map((arg) => {
     const variableName = getVariableName(arg);
     if (variableName) {
@@ -301,10 +2736,14 @@ function argumentsToString(args, options) {
   function getVariableName(value) {
     if (variables) {
       for (const name in variables) {
+        if (!variables.hasOwnProperty(name)) continue;
         if (variables[name] === value) {
           return name;
         }
       }
+    }
+    if (onUnrecognizedArgumentLookup) {
+      return onUnrecognizedArgumentLookup(value);
     }
     return null;
   }
@@ -339,7 +2778,7 @@ function argumentToString(arg, options) {
     case 'Number': return getEntity(arg);
     case 'Boolean': return getEntity(arg);
     case 'Array':
-      return addVariable(arg, `new ${arg.constructor.name}(${Array.from(arg).join(',')})`);
+      return addVariable(arg, `new ${arg.constructor.name}([${Array.from(arg).join(',')}])`);
     case 'Float32Array':
     case 'Uint8Array':
     case 'Uint16Array':
@@ -370,9 +2809,68 @@ if (typeof window !== 'undefined') {
   window.glWiretap = glWiretap;
 }
 
-},{}],2:[function(require,module,exports){
-'use strict'
+},{}],8:[function(require,module,exports){
+if (typeof WebGLRenderingContext !== 'undefined') {
+  module.exports = require('./src/javascript/browser-index')
+} else {
+  module.exports = require('./src/javascript/node-index')
+}
 
+},{"./src/javascript/browser-index":10,"./src/javascript/node-index":19}],9:[function(require,module,exports){
+module.exports={
+  "name": "gl",
+  "version": "4.4.0",
+  "description": "Creates a WebGL context without a window",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "browser": "browser_index.js",
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "scripts": {
+    "test": "standard | snazzy && tape test/*.js | faucet",
+    "rebuild": "node-gyp rebuild --verbose",
+    "prebuild": "prebuild --all --strip",
+    "install": "prebuild-install || node-gyp rebuild"
+  },
+  "dependencies": {
+    "bindings": "^1.5.0",
+    "bit-twiddle": "^1.0.2",
+    "glsl-tokenizer": "^2.0.2",
+    "nan": "^2.14.0",
+    "node-gyp": "^4.0.0",
+    "prebuild-install": "^5.1.0"
+  },
+  "devDependencies": {
+    "angle-normals": "^1.0.0",
+    "bunny": "^1.0.1",
+    "faucet": "0.0.1",
+    "gl-conformance": "^2.0.9",
+    "prebuild": "^8.0.1",
+    "snazzy": "^8.0.0",
+    "standard": "^12.0.1",
+    "tape": "^4.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/stackgl/headless-gl.git"
+  },
+  "keywords": [
+    "webgl",
+    "opengl",
+    "gl",
+    "headless",
+    "server",
+    "gpgpu"
+  ],
+  "author": "Mikola Lysenko",
+  "license": "BSD-2-Clause",
+  "gypfile": true
+}
+
+},{}],10:[function(require,module,exports){
 function createContext (width, height, options) {
   width = width | 0
   height = height | 0
@@ -380,11 +2878,11 @@ function createContext (width, height, options) {
     return null
   }
 
-  var canvas = document.createElement('canvas')
+  const canvas = document.createElement('canvas')
   if (!canvas) {
     return null
   }
-  var gl
+  let gl
   canvas.width = width
   canvas.height = height
 
@@ -398,24 +2896,24 @@ function createContext (width, height, options) {
     }
   }
 
-  var _getExtension = gl.getExtension
-  var extDestroy = {
+  const _getExtension = gl.getExtension
+  const extDestroy = {
     destroy: function () {
-      var loseContext = _getExtension.call(gl, 'WEBGL_lose_context')
+      const loseContext = _getExtension.call(gl, 'WEBGL_lose_context')
       if (loseContext) {
         loseContext.loseContext()
       }
     }
   }
 
-  var extResize = {
+  const extResize = {
     resize: function (w, h) {
       canvas.width = w
       canvas.height = h
     }
   }
 
-  var _supportedExtensions = gl.getSupportedExtensions().slice()
+  const _supportedExtensions = gl.getSupportedExtensions().slice()
   _supportedExtensions.push(
     'STACKGL_destroy_context',
     'STACKGL_resize_drawingbuffer')
@@ -424,7 +2922,7 @@ function createContext (width, height, options) {
   }
 
   gl.getExtension = function (extName) {
-    var name = extName.toLowerCase()
+    const name = extName.toLowerCase()
     if (name === 'stackgl_resize_drawingbuffer') {
       return extResize
     }
@@ -439,7 +2937,5771 @@ function createContext (width, height, options) {
 
 module.exports = createContext
 
-},{}],3:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
+const { gl } = require('../native-gl')
+const { vertexCount } = require('../utils')
+
+class ANGLEInstancedArrays {
+  constructor (ctx) {
+    this.VERTEX_ATTRIB_ARRAY_DIVISOR_ANGLE = 0x88fe
+    this.ctx = ctx
+
+    this._drawArraysInstanced = gl._drawArraysInstanced.bind(ctx)
+    this._drawElementsInstanced = gl._drawElementsInstanced.bind(ctx)
+    this._vertexAttribDivisor = gl._vertexAttribDivisor.bind(ctx)
+  }
+
+  drawArraysInstancedANGLE (mode, first, count, primCount) {
+    const { ctx } = this
+    mode |= 0
+    first |= 0
+    count |= 0
+    primCount |= 0
+    if (first < 0 || count < 0 || primCount < 0) {
+      ctx.setError(gl.INVALID_VALUE)
+      return
+    }
+    if (!ctx._checkStencilState()) {
+      return
+    }
+    const reducedCount = vertexCount(mode, count)
+    if (reducedCount < 0) {
+      ctx.setError(gl.INVALID_ENUM)
+      return
+    }
+    if (!ctx._framebufferOk()) {
+      return
+    }
+    if (count === 0 || primCount === 0) {
+      return
+    }
+    let maxIndex = first
+    if (count > 0) {
+      maxIndex = (count + first - 1) >>> 0
+    }
+    if (this.checkInstancedVertexAttribState(maxIndex, primCount)) {
+      return this._drawArraysInstanced(mode, first, reducedCount, primCount)
+    }
+  }
+
+  drawElementsInstancedANGLE (mode, count, type, ioffset, primCount) {
+    const { ctx } = this
+    mode |= 0
+    count |= 0
+    type |= 0
+    ioffset |= 0
+    primCount |= 0
+
+    if (count < 0 || ioffset < 0 || primCount < 0) {
+      ctx.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    if (!ctx._checkStencilState()) {
+      return
+    }
+
+    const elementBuffer = ctx._activeElementArrayBuffer
+    if (!elementBuffer) {
+      ctx.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    // Unpack element data
+    let elementData = null
+    let offset = ioffset
+    if (type === gl.UNSIGNED_SHORT) {
+      if (offset % 2) {
+        ctx.setError(gl.INVALID_OPERATION)
+        return
+      }
+      offset >>= 1
+      elementData = new Uint16Array(elementBuffer._elements.buffer)
+    } else if (ctx._extensions.oes_element_index_uint && type === gl.UNSIGNED_INT) {
+      if (offset % 4) {
+        ctx.setError(gl.INVALID_OPERATION)
+        return
+      }
+      offset >>= 2
+      elementData = new Uint32Array(elementBuffer._elements.buffer)
+    } else if (type === gl.UNSIGNED_BYTE) {
+      elementData = elementBuffer._elements
+    } else {
+      ctx.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    let reducedCount = count
+    switch (mode) {
+      case gl.TRIANGLES:
+        if (count % 3) {
+          reducedCount -= (count % 3)
+        }
+        break
+      case gl.LINES:
+        if (count % 2) {
+          reducedCount -= (count % 2)
+        }
+        break
+      case gl.POINTS:
+        break
+      case gl.LINE_LOOP:
+      case gl.LINE_STRIP:
+        if (count < 2) {
+          ctx.setError(gl.INVALID_OPERATION)
+          return
+        }
+        break
+      case gl.TRIANGLE_FAN:
+      case gl.TRIANGLE_STRIP:
+        if (count < 3) {
+          ctx.setError(gl.INVALID_OPERATION)
+          return
+        }
+        break
+      default:
+        ctx.setError(gl.INVALID_ENUM)
+        return
+    }
+
+    if (!ctx._framebufferOk()) {
+      return
+    }
+
+    if (count === 0 || primCount === 0) {
+      this.checkInstancedVertexAttribState(0, 0)
+      return
+    }
+
+    if ((count + offset) >>> 0 > elementData.length) {
+      ctx.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    // Compute max index
+    let maxIndex = -1
+    for (let i = offset; i < offset + count; ++i) {
+      maxIndex = Math.max(maxIndex, elementData[i])
+    }
+
+    if (maxIndex < 0) {
+      this.checkInstancedVertexAttribState(0, 0)
+      return
+    }
+
+    if (this.checkInstancedVertexAttribState(maxIndex, primCount)) {
+      if (reducedCount > 0) {
+        this._drawElementsInstanced(mode, reducedCount, type, ioffset, primCount)
+      }
+    }
+  }
+
+  vertexAttribDivisorANGLE (index, divisor) {
+    const { ctx } = this
+    index |= 0
+    divisor |= 0
+    if (divisor < 0 ||
+      index < 0 || index >= ctx._vertexAttribs.length) {
+      ctx.setError(gl.INVALID_VALUE)
+      return
+    }
+    const attrib = ctx._vertexAttribs[index]
+    attrib._divisor = divisor
+    this._vertexAttribDivisor(index, divisor)
+  }
+
+  checkInstancedVertexAttribState (maxIndex, primCount) {
+    const { ctx } = this
+    const program = ctx._activeProgram
+    if (!program) {
+      ctx.setError(gl.INVALID_OPERATION)
+      return false
+    }
+
+    const attribs = ctx._vertexAttribs
+    let hasZero = false
+    for (let i = 0; i < attribs.length; ++i) {
+      const attrib = attribs[i]
+      if (attrib._isPointer) {
+        const buffer = attrib._pointerBuffer
+        if (program._attributes.indexOf(i) >= 0) {
+          if (!buffer) {
+            ctx.setError(gl.INVALID_OPERATION)
+            return false
+          }
+          let maxByte = 0
+          if (attrib._divisor === 0) {
+            hasZero = true
+            maxByte = attrib._pointerStride * maxIndex +
+              attrib._pointerSize +
+              attrib._pointerOffset
+          } else {
+            maxByte = attrib._pointerStride * (Math.ceil(primCount / attrib._divisor) - 1) +
+              attrib._pointerSize +
+              attrib._pointerOffset
+          }
+          if (maxByte > buffer._size) {
+            ctx.setError(gl.INVALID_OPERATION)
+            return false
+          }
+        }
+      }
+    }
+
+    if (!hasZero) {
+      ctx.setError(gl.INVALID_OPERATION)
+      return false
+    }
+
+    return true
+  }
+}
+
+function getANGLEInstancedArrays (ctx) {
+  return new ANGLEInstancedArrays(ctx)
+}
+
+module.exports = { ANGLEInstancedArrays, getANGLEInstancedArrays }
+
+},{"../native-gl":18,"../utils":20}],12:[function(require,module,exports){
+class OESElementIndexUint {}
+
+function getOESElementIndexUint (context) {
+  let result = null
+  const exts = context.getSupportedExtensions()
+
+  if (exts && exts.indexOf('OES_element_index_uint') >= 0) {
+    result = new OESElementIndexUint()
+  }
+
+  return result
+}
+
+module.exports = { getOESElementIndexUint, OESElementIndexUint }
+
+},{}],13:[function(require,module,exports){
+class OESTextureFloat {}
+
+function getOESTextureFloat (context) {
+  let result = null
+  const exts = context.getSupportedExtensions()
+
+  if (exts && exts.indexOf('OES_texture_float') >= 0) {
+    result = new OESTextureFloat()
+  }
+
+  return result
+}
+
+module.exports = { getOESTextureFloat, OESTextureFloat }
+
+},{}],14:[function(require,module,exports){
+class STACKGLDestroyContext {
+  constructor (ctx) {
+    this.destroy = ctx.destroy.bind(ctx)
+  }
+}
+
+function getSTACKGLDestroyContext (ctx) {
+  return new STACKGLDestroyContext(ctx)
+}
+
+module.exports = { getSTACKGLDestroyContext, STACKGLDestroyContext }
+
+},{}],15:[function(require,module,exports){
+class STACKGLResizeDrawingBuffer {
+  constructor (ctx) {
+    this.resize = ctx.resize.bind(ctx)
+  }
+}
+
+function getSTACKGLResizeDrawingBuffer (ctx) {
+  return new STACKGLResizeDrawingBuffer(ctx)
+}
+
+module.exports = { getSTACKGLResizeDrawingBuffer, STACKGLResizeDrawingBuffer }
+
+},{}],16:[function(require,module,exports){
+const { gl } = require('../native-gl')
+
+class WebGLDrawBuffers {
+  constructor (ctx) {
+    this.ctx = ctx
+    const exts = ctx.getSupportedExtensions()
+
+    if (exts && exts.indexOf('WEBGL_draw_buffers') >= 0) {
+      Object.assign(this, ctx.extWEBGL_draw_buffers())
+      this._buffersState = [ctx.BACK]
+      this._maxDrawBuffers = ctx._getParameterDirect(this.MAX_DRAW_BUFFERS_WEBGL)
+      this._ALL_ATTACHMENTS = []
+      this._ALL_COLOR_ATTACHMENTS = []
+      const allColorAttachments = [
+        this.COLOR_ATTACHMENT0_WEBGL,
+        this.COLOR_ATTACHMENT1_WEBGL,
+        this.COLOR_ATTACHMENT2_WEBGL,
+        this.COLOR_ATTACHMENT3_WEBGL,
+        this.COLOR_ATTACHMENT4_WEBGL,
+        this.COLOR_ATTACHMENT5_WEBGL,
+        this.COLOR_ATTACHMENT6_WEBGL,
+        this.COLOR_ATTACHMENT7_WEBGL,
+        this.COLOR_ATTACHMENT8_WEBGL,
+        this.COLOR_ATTACHMENT9_WEBGL,
+        this.COLOR_ATTACHMENT10_WEBGL,
+        this.COLOR_ATTACHMENT11_WEBGL,
+        this.COLOR_ATTACHMENT12_WEBGL,
+        this.COLOR_ATTACHMENT13_WEBGL,
+        this.COLOR_ATTACHMENT14_WEBGL,
+        this.COLOR_ATTACHMENT15_WEBGL
+      ]
+      while (this._ALL_ATTACHMENTS.length < this._maxDrawBuffers) {
+        const colorAttachment = allColorAttachments.shift()
+        this._ALL_ATTACHMENTS.push(colorAttachment)
+        this._ALL_COLOR_ATTACHMENTS.push(colorAttachment)
+      }
+      this._ALL_ATTACHMENTS.push(
+        gl.DEPTH_ATTACHMENT,
+        gl.STENCIL_ATTACHMENT,
+        gl.DEPTH_STENCIL_ATTACHMENT
+      )
+    }
+  }
+
+  drawBuffersWEBGL (buffers) {
+    const { ctx } = this
+    if (buffers.length < 1) {
+      ctx.setError(gl.INVALID_OPERATION)
+      return
+    }
+    if (buffers.length === 1 && buffers[0] === gl.BACK) {
+      this._buffersState = buffers
+      ctx.drawBuffersWEBGL([this.COLOR_ATTACHMENT0_WEBGL])
+      return
+    } else if (!ctx._activeFramebuffer) {
+      if (buffers.length > 1) {
+        ctx.setError(gl.INVALID_OPERATION)
+        return
+      }
+      for (let i = 0; i < buffers.length; i++) {
+        if (buffers[i] > gl.NONE) {
+          ctx.setError(gl.INVALID_OPERATION)
+          return
+        }
+      }
+    }
+    this._buffersState = buffers
+    ctx.drawBuffersWEBGL(buffers)
+  }
+}
+
+function getWebGLDrawBuffers (ctx) {
+  const exts = ctx.getSupportedExtensions()
+
+  if (exts && exts.indexOf('WEBGL_draw_buffers') >= 0) {
+    return new WebGLDrawBuffers(ctx)
+  } else {
+    return null
+  }
+}
+
+module.exports = {
+  getWebGLDrawBuffers,
+  WebGLDrawBuffers
+}
+
+},{"../native-gl":18}],17:[function(require,module,exports){
+class Linkable {
+  constructor (_) {
+    this._ = _
+    this._references = []
+    this._refCount = 0
+    this._pendingDelete = false
+    this._binding = 0
+  }
+
+  _link (b) {
+    this._references.push(b)
+    b._refCount += 1
+    return true
+  }
+
+  _unlink (b) {
+    let idx = this._references.indexOf(b)
+    if (idx < 0) {
+      return false
+    }
+    while (idx >= 0) {
+      this._references[idx] = this._references[this._references.length - 1]
+      this._references.pop()
+      b._refCount -= 1
+      b._checkDelete()
+      idx = this._references.indexOf(b)
+    }
+    return true
+  }
+
+  _linked (b) {
+    return this._references.indexOf(b) >= 0
+  }
+
+  _checkDelete () {
+    if (this._refCount <= 0 &&
+      this._pendingDelete &&
+      this._ !== 0) {
+      while (this._references.length > 0) {
+        this._unlink(this._references[0])
+      }
+      this._performDelete()
+      this._ = 0
+    }
+  }
+
+  _performDelete () {}
+}
+
+module.exports = { Linkable }
+
+},{}],18:[function(require,module,exports){
+(function (process){
+const NativeWebGL = require('bindings')('webgl')
+const { WebGLRenderingContext: NativeWebGLRenderingContext } = NativeWebGL
+process.on('exit', NativeWebGL.cleanup)
+
+const gl = NativeWebGLRenderingContext.prototype
+
+// from binding.gyp
+delete gl['1.0.0']
+
+// from binding.gyp
+delete NativeWebGLRenderingContext['1.0.0']
+
+module.exports = { gl, NativeWebGL, NativeWebGLRenderingContext }
+
+}).call(this,require('_process'))
+},{"_process":154,"bindings":2}],19:[function(require,module,exports){
+const bits = require('bit-twiddle')
+const { WebGLContextAttributes } = require('./webgl-context-attributes')
+const { WebGLRenderingContext, wrapContext } = require('./webgl-rendering-context')
+const { WebGLTextureUnit } = require('./webgl-texture-unit')
+const { WebGLVertexAttribute } = require('./webgl-vertex-attribute')
+
+let CONTEXT_COUNTER = 0
+
+function flag (options, name, dflt) {
+  if (!options || !(typeof options === 'object') || !(name in options)) {
+    return dflt
+  }
+  return !!options[name]
+}
+
+function createContext (width, height, options) {
+  width = width | 0
+  height = height | 0
+  if (!(width > 0 && height > 0)) {
+    return null
+  }
+
+  const contextAttributes = new WebGLContextAttributes(
+    flag(options, 'alpha', true),
+    flag(options, 'depth', true),
+    flag(options, 'stencil', false),
+    false, // flag(options, 'antialias', true),
+    flag(options, 'premultipliedAlpha', true),
+    flag(options, 'preserveDrawingBuffer', false),
+    flag(options, 'preferLowPowerToHighPerformance', false),
+    flag(options, 'failIfMajorPerformanceCaveat', false))
+
+  // Can only use premultipliedAlpha if alpha is set
+  contextAttributes.premultipliedAlpha =
+    contextAttributes.premultipliedAlpha && contextAttributes.alpha
+
+  let ctx
+  try {
+    ctx = new WebGLRenderingContext(
+      1,
+      1,
+      contextAttributes.alpha,
+      contextAttributes.depth,
+      contextAttributes.stencil,
+      contextAttributes.antialias,
+      contextAttributes.premultipliedAlpha,
+      contextAttributes.preserveDrawingBuffer,
+      contextAttributes.preferLowPowerToHighPerformance,
+      contextAttributes.failIfMajorPerformanceCaveat)
+  } catch (e) {}
+  if (!ctx) {
+    return null
+  }
+
+  ctx.drawingBufferWidth = width
+  ctx.drawingBufferHeight = height
+
+  ctx._ = CONTEXT_COUNTER++
+
+  ctx._contextAttributes = contextAttributes
+
+  ctx._extensions = {}
+  ctx._programs = {}
+  ctx._shaders = {}
+  ctx._buffers = {}
+  ctx._textures = {}
+  ctx._framebuffers = {}
+  ctx._renderbuffers = {}
+
+  ctx._activeProgram = null
+  ctx._activeFramebuffer = null
+  ctx._activeArrayBuffer = null
+  ctx._activeElementArrayBuffer = null
+  ctx._activeRenderbuffer = null
+
+  // Initialize texture units
+  const numTextures = ctx.getParameter(ctx.MAX_COMBINED_TEXTURE_IMAGE_UNITS)
+  ctx._textureUnits = new Array(numTextures)
+  for (let i = 0; i < numTextures; ++i) {
+    ctx._textureUnits[i] = new WebGLTextureUnit(i)
+  }
+  ctx._activeTextureUnit = 0
+  ctx.activeTexture(ctx.TEXTURE0)
+
+  ctx._errorStack = []
+
+  // Initialize vertex attributes
+  const numAttribs = ctx.getParameter(ctx.MAX_VERTEX_ATTRIBS)
+  ctx._vertexAttribs = new Array(numAttribs)
+  for (let i = 0; i < numAttribs; ++i) {
+    ctx._vertexAttribs[i] = new WebGLVertexAttribute(ctx, i)
+  }
+
+  // Store limits
+  ctx._maxTextureSize = ctx.getParameter(ctx.MAX_TEXTURE_SIZE)
+  ctx._maxTextureLevel = bits.log2(bits.nextPow2(ctx._maxTextureSize))
+  ctx._maxCubeMapSize = ctx.getParameter(ctx.MAX_CUBE_MAP_TEXTURE_SIZE)
+  ctx._maxCubeMapLevel = bits.log2(bits.nextPow2(ctx._maxCubeMapSize))
+
+  // Unpack alignment
+  ctx._unpackAlignment = 4
+  ctx._packAlignment = 4
+
+  // Allocate framebuffer
+  ctx._allocateDrawingBuffer(width, height)
+
+  const attrib0Buffer = ctx.createBuffer()
+  ctx._attrib0Buffer = attrib0Buffer
+
+  // Initialize defaults
+  ctx.bindBuffer(ctx.ARRAY_BUFFER, null)
+  ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, null)
+  ctx.bindFramebuffer(ctx.FRAMEBUFFER, null)
+  ctx.bindRenderbuffer(ctx.RENDERBUFFER, null)
+
+  // Set viewport and scissor
+  ctx.viewport(0, 0, width, height)
+  ctx.scissor(0, 0, width, height)
+
+  // Clear buffers
+  ctx.clearDepth(1)
+  ctx.clearColor(0, 0, 0, 0)
+  ctx.clearStencil(0)
+  ctx.clear(ctx.COLOR_BUFFER_BIT | ctx.DEPTH_BUFFER_BIT | ctx.STENCIL_BUFFER_BIT)
+
+  return wrapContext(ctx)
+}
+
+module.exports = createContext
+
+},{"./webgl-context-attributes":23,"./webgl-rendering-context":28,"./webgl-texture-unit":31,"./webgl-vertex-attribute":34,"bit-twiddle":3}],20:[function(require,module,exports){
+(function (Buffer){
+const { gl } = require('./native-gl')
+
+const { WebGLUniformLocation } = require('./webgl-uniform-location')
+
+function bindPublics (props, wrapper, privateInstance, privateMethods) {
+  for (let i = 0; i < props.length; i++) {
+    const prop = props[i]
+    const value = privateInstance[prop]
+    if (typeof value === 'function') {
+      if (privateMethods.indexOf(prop) === -1) {
+        wrapper[prop] = value.bind(privateInstance)
+      }
+    } else {
+      if (prop[0] === '_' ||
+        prop[0] === '0' ||
+        prop[0] === '1') {
+        continue
+      }
+      wrapper[prop] = value
+    }
+  }
+}
+
+function checkObject (object) {
+  return typeof object === 'object' ||
+    (object === void 0)
+}
+
+function checkUniform (program, location) {
+  return location instanceof WebGLUniformLocation &&
+    location._program === program &&
+    location._linkCount === program._linkCount
+}
+
+function isTypedArray (data) {
+  return data instanceof Uint8Array ||
+    data instanceof Uint8ClampedArray ||
+    data instanceof Int8Array ||
+    data instanceof Uint16Array ||
+    data instanceof Int16Array ||
+    data instanceof Uint32Array ||
+    data instanceof Int32Array ||
+    data instanceof Float32Array ||
+    data instanceof Float64Array
+}
+
+// Don't allow: ", $, `, @, \, ', \0
+function isValidString (str) {
+  // Remove comments first
+  const c = str.replace(/(?:\/\*(?:[\s\S]*?)\*\/)|(?:([\s;])+\/\/(?:.*)$)/gm, '')
+  return !(/["$`@\\'\0]/.test(c))
+}
+
+function vertexCount (primitive, count) {
+  switch (primitive) {
+    case gl.TRIANGLES:
+      return count - (count % 3)
+    case gl.LINES:
+      return count - (count % 2)
+    case gl.LINE_LOOP:
+    case gl.POINTS:
+      return count
+    case gl.TRIANGLE_FAN:
+    case gl.LINE_STRIP:
+      if (count < 2) {
+        return 0
+      }
+      return count
+    case gl.TRIANGLE_STRIP:
+      if (count < 3) {
+        return 0
+      }
+      return count
+    default:
+      return -1
+  }
+}
+
+function typeSize (type) {
+  switch (type) {
+    case gl.UNSIGNED_BYTE:
+    case gl.BYTE:
+      return 1
+    case gl.UNSIGNED_SHORT:
+    case gl.SHORT:
+      return 2
+    case gl.UNSIGNED_INT:
+    case gl.INT:
+    case gl.FLOAT:
+      return 4
+  }
+  return 0
+}
+
+function uniformTypeSize (type) {
+  switch (type) {
+    case gl.BOOL_VEC4:
+    case gl.INT_VEC4:
+    case gl.FLOAT_VEC4:
+      return 4
+
+    case gl.BOOL_VEC3:
+    case gl.INT_VEC3:
+    case gl.FLOAT_VEC3:
+      return 3
+
+    case gl.BOOL_VEC2:
+    case gl.INT_VEC2:
+    case gl.FLOAT_VEC2:
+      return 2
+
+    case gl.BOOL:
+    case gl.INT:
+    case gl.FLOAT:
+    case gl.SAMPLER_2D:
+    case gl.SAMPLER_CUBE:
+      return 1
+
+    default:
+      return 0
+  }
+}
+
+function unpackTypedArray (array) {
+  return (new Uint8Array(array.buffer)).subarray(
+    array.byteOffset,
+    array.byteLength + array.byteOffset)
+}
+
+function extractImageData (pixels) {
+  if (typeof pixels === 'object' && typeof pixels.width !== 'undefined' && typeof pixels.height !== 'undefined') {
+    if (typeof pixels.data !== 'undefined') {
+      return pixels
+    }
+
+    let context = null
+
+    if (typeof pixels.getContext === 'function') {
+      context = pixels.getContext('2d')
+    } else if (typeof pixels.src !== 'undefined' && typeof document === 'object' && typeof document.createElement === 'function') {
+      const canvas = document.createElement('canvas')
+
+      if (typeof canvas === 'object' && typeof canvas.getContext === 'function') {
+        context = canvas.getContext('2d')
+
+        if (context !== null) {
+          context.drawImage(pixels, 0, 0)
+        }
+      }
+    }
+
+    if (context !== null) {
+      return context.getImageData(0, 0, pixels.width, pixels.height)
+    }
+  }
+
+  return null
+}
+
+function formatSize (internalFormat) {
+  switch (internalFormat) {
+    case gl.ALPHA:
+    case gl.LUMINANCE:
+      return 1
+    case gl.LUMINANCE_ALPHA:
+      return 2
+    case gl.RGB:
+      return 3
+    case gl.RGBA:
+      return 4
+  }
+  return 0
+}
+
+function convertPixels (pixels) {
+  if (typeof pixels === 'object' && pixels !== null) {
+    if (pixels instanceof ArrayBuffer) {
+      return new Uint8Array(pixels)
+    } else if (pixels instanceof Uint8Array ||
+      pixels instanceof Uint16Array ||
+      pixels instanceof Uint8ClampedArray ||
+      pixels instanceof Float32Array) {
+      return unpackTypedArray(pixels)
+    } else if (pixels instanceof Buffer) {
+      return new Uint8Array(pixels)
+    }
+  }
+  return null
+}
+
+function checkFormat (format) {
+  return (
+    format === gl.ALPHA ||
+    format === gl.LUMINANCE_ALPHA ||
+    format === gl.LUMINANCE ||
+    format === gl.RGB ||
+    format === gl.RGBA)
+}
+
+function validCubeTarget (target) {
+  return target === gl.TEXTURE_CUBE_MAP_POSITIVE_X ||
+    target === gl.TEXTURE_CUBE_MAP_NEGATIVE_X ||
+    target === gl.TEXTURE_CUBE_MAP_POSITIVE_Y ||
+    target === gl.TEXTURE_CUBE_MAP_NEGATIVE_Y ||
+    target === gl.TEXTURE_CUBE_MAP_POSITIVE_Z ||
+    target === gl.TEXTURE_CUBE_MAP_NEGATIVE_Z
+}
+
+module.exports = {
+  bindPublics,
+  checkObject,
+  isTypedArray,
+  isValidString,
+  vertexCount,
+  typeSize,
+  uniformTypeSize,
+  unpackTypedArray,
+  extractImageData,
+  formatSize,
+  checkFormat,
+  checkUniform,
+  convertPixels,
+  validCubeTarget
+}
+
+}).call(this,require("buffer").Buffer)
+},{"./native-gl":18,"./webgl-uniform-location":33,"buffer":5}],21:[function(require,module,exports){
+class WebGLActiveInfo {
+  constructor (_) {
+    this.size = _.size
+    this.type = _.type
+    this.name = _.name
+  }
+}
+module.exports = { WebGLActiveInfo }
+
+},{}],22:[function(require,module,exports){
+const { Linkable } = require('./linkable')
+const { gl } = require('./native-gl')
+
+class WebGLBuffer extends Linkable {
+  constructor (_, ctx) {
+    super(_)
+    this._ctx = ctx
+    this._size = 0
+    this._elements = new Uint8Array(0)
+  }
+
+  _performDelete () {
+    const ctx = this._ctx
+    delete ctx._buffers[this._ | 0]
+    gl.deleteBuffer.call(ctx, this._ | 0)
+  }
+}
+
+module.exports = { WebGLBuffer }
+
+},{"./linkable":17,"./native-gl":18}],23:[function(require,module,exports){
+class WebGLContextAttributes {
+  constructor (
+    alpha,
+    depth,
+    stencil,
+    antialias,
+    premultipliedAlpha,
+    preserveDrawingBuffer,
+    preferLowPowerToHighPerformance,
+    failIfMajorPerformanceCaveat) {
+    this.alpha = alpha
+    this.depth = depth
+    this.stencil = stencil
+    this.antialias = antialias
+    this.premultipliedAlpha = premultipliedAlpha
+    this.preserveDrawingBuffer = preserveDrawingBuffer
+    this.preferLowPowerToHighPerformance = preferLowPowerToHighPerformance
+    this.failIfMajorPerformanceCaveat = failIfMajorPerformanceCaveat
+  }
+}
+
+module.exports = { WebGLContextAttributes }
+
+},{}],24:[function(require,module,exports){
+class WebGLDrawingBufferWrapper {
+  constructor (framebuffer, color, depthStencil) {
+    this._framebuffer = framebuffer
+    this._color = color
+    this._depthStencil = depthStencil
+  }
+}
+
+module.exports = { WebGLDrawingBufferWrapper }
+
+},{}],25:[function(require,module,exports){
+const { Linkable } = require('./linkable')
+const { gl } = require('./native-gl')
+
+class WebGLFramebuffer extends Linkable {
+  constructor (_, ctx) {
+    super(_)
+    this._ctx = ctx
+    this._binding = 0
+
+    this._width = 0
+    this._height = 0
+    this._status = null
+
+    this._attachments = {}
+    this._attachments[gl.COLOR_ATTACHMENT0] = null
+    this._attachments[gl.DEPTH_ATTACHMENT] = null
+    this._attachments[gl.STENCIL_ATTACHMENT] = null
+    this._attachments[gl.DEPTH_STENCIL_ATTACHMENT] = null
+
+    this._attachmentLevel = {}
+    this._attachmentLevel[gl.COLOR_ATTACHMENT0] = 0
+    this._attachmentLevel[gl.DEPTH_ATTACHMENT] = 0
+    this._attachmentLevel[gl.STENCIL_ATTACHMENT] = 0
+    this._attachmentLevel[gl.DEPTH_STENCIL_ATTACHMENT] = 0
+
+    this._attachmentFace = {}
+    this._attachmentFace[gl.COLOR_ATTACHMENT0] = 0
+    this._attachmentFace[gl.DEPTH_ATTACHMENT] = 0
+    this._attachmentFace[gl.STENCIL_ATTACHMENT] = 0
+    this._attachmentFace[gl.DEPTH_STENCIL_ATTACHMENT] = 0
+
+    if (ctx._extensions.webgl_draw_buffers) {
+      const { webgl_draw_buffers } = ctx._extensions // eslint-disable-line
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT1_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT2_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT3_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT4_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT5_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT6_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT7_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT8_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT9_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT10_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT11_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT12_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT13_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT14_WEBGL] = null
+      this._attachments[webgl_draw_buffers.COLOR_ATTACHMENT15_WEBGL] = null
+      this._attachments[gl.NONE] = null
+      this._attachments[gl.BACK] = null
+
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT1_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT2_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT3_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT4_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT5_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT6_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT7_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT8_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT9_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT10_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT11_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT12_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT13_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT14_WEBGL] = 0
+      this._attachmentLevel[webgl_draw_buffers.COLOR_ATTACHMENT15_WEBGL] = 0
+      this._attachmentLevel[gl.NONE] = null
+      this._attachmentLevel[gl.BACK] = null
+
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT1_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT2_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT3_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT4_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT5_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT6_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT7_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT8_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT9_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT10_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT11_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT12_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT13_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT14_WEBGL] = 0
+      this._attachmentFace[webgl_draw_buffers.COLOR_ATTACHMENT15_WEBGL] = 0
+      this._attachmentFace[gl.NONE] = null
+      this._attachmentFace[gl.BACK] = null
+    }
+  }
+
+  _clearAttachment (attachment) {
+    const object = this._attachments[attachment]
+    if (!object) {
+      return
+    }
+    this._attachments[attachment] = null
+    this._unlink(object)
+  }
+
+  _setAttachment (object, attachment) {
+    const prevObject = this._attachments[attachment]
+    if (prevObject === object) {
+      return
+    }
+
+    this._clearAttachment(attachment)
+    if (!object) {
+      return
+    }
+
+    this._attachments[attachment] = object
+
+    this._link(object)
+  }
+
+  _performDelete () {
+    const ctx = this._ctx
+    delete ctx._framebuffers[this._ | 0]
+    gl.deleteFramebuffer.call(ctx, this._ | 0)
+  }
+}
+
+module.exports = { WebGLFramebuffer }
+
+},{"./linkable":17,"./native-gl":18}],26:[function(require,module,exports){
+const { Linkable } = require('./linkable')
+const { gl } = require('./native-gl')
+
+class WebGLProgram extends Linkable {
+  constructor (_, ctx) {
+    super(_)
+    this._ctx = ctx
+    this._linkCount = 0
+    this._linkStatus = false
+    this._linkInfoLog = 'not linked'
+    this._attributes = []
+    this._uniforms = []
+  }
+
+  _performDelete () {
+    const ctx = this._ctx
+    delete ctx._programs[this._ | 0]
+    gl.deleteProgram.call(ctx, this._ | 0)
+  }
+}
+
+module.exports = { WebGLProgram }
+
+},{"./linkable":17,"./native-gl":18}],27:[function(require,module,exports){
+const { Linkable } = require('./linkable')
+const { gl } = require('./native-gl')
+
+class WebGLRenderbuffer extends Linkable {
+  constructor (_, ctx) {
+    super(_)
+    this._ctx = ctx
+    this._binding = 0
+    this._width = 0
+    this._height = 0
+    this._format = 0
+  }
+
+  _performDelete () {
+    const ctx = this._ctx
+    delete ctx._renderbuffers[this._ | 0]
+    gl.deleteRenderbuffer.call(ctx, this._ | 0)
+  }
+}
+
+module.exports = { WebGLRenderbuffer }
+
+},{"./linkable":17,"./native-gl":18}],28:[function(require,module,exports){
+const bits = require('bit-twiddle')
+const tokenize = require('glsl-tokenizer/string')
+const HEADLESS_VERSION = require('../../package.json').version
+const { gl, NativeWebGLRenderingContext, NativeWebGL } = require('./native-gl')
+const { getANGLEInstancedArrays } = require('./extensions/angle-instanced-arrays')
+const { getOESElementIndexUint } = require('./extensions/oes-element-index-unit')
+const { getOESTextureFloat } = require('./extensions/oes-texture-float')
+const { getSTACKGLDestroyContext } = require('./extensions/stackgl-destroy-context')
+const { getSTACKGLResizeDrawingBuffer } = require('./extensions/stackgl-resize-drawing-buffer')
+const { getWebGLDrawBuffers } = require('./extensions/webgl-draw-buffers')
+const {
+  bindPublics,
+  checkObject,
+  checkUniform,
+  formatSize,
+  isValidString,
+  typeSize,
+  uniformTypeSize,
+  extractImageData,
+  vertexCount,
+  isTypedArray,
+  unpackTypedArray,
+  convertPixels,
+  checkFormat,
+  validCubeTarget } = require('./utils')
+
+const { WebGLActiveInfo } = require('./webgl-active-info')
+const { WebGLFramebuffer } = require('./webgl-framebuffer')
+const { WebGLBuffer } = require('./webgl-buffer')
+const { WebGLDrawingBufferWrapper } = require('./webgl-drawing-buffer-wrapper')
+const { WebGLProgram } = require('./webgl-program')
+const { WebGLRenderbuffer } = require('./webgl-renderbuffer')
+const { WebGLShader } = require('./webgl-shader')
+const { WebGLShaderPrecisionFormat } = require('./webgl-shader-precision-format')
+const { WebGLTexture } = require('./webgl-texture')
+const { WebGLUniformLocation } = require('./webgl-uniform-location')
+
+// These are defined by the WebGL spec
+const MAX_UNIFORM_LENGTH = 256
+const MAX_ATTRIBUTE_LENGTH = 256
+
+const DEFAULT_ATTACHMENTS = [
+  gl.COLOR_ATTACHMENT0,
+  gl.DEPTH_ATTACHMENT,
+  gl.STENCIL_ATTACHMENT,
+  gl.DEPTH_STENCIL_ATTACHMENT
+]
+
+const DEFAULT_COLOR_ATTACHMENTS = [gl.COLOR_ATTACHMENT0]
+
+const availableExtensions = {
+  angle_instanced_arrays: getANGLEInstancedArrays,
+  oes_element_index_uint: getOESElementIndexUint,
+  oes_texture_float: getOESTextureFloat,
+  stackgl_destroy_context: getSTACKGLDestroyContext,
+  stackgl_resize_drawingbuffer: getSTACKGLResizeDrawingBuffer,
+  webgl_draw_buffers: getWebGLDrawBuffers
+}
+
+const privateMethods = [
+  'resize',
+  'destroy'
+]
+
+function wrapContext (ctx) {
+  const wrapper = new WebGLRenderingContext()
+  bindPublics(Object.keys(ctx), wrapper, ctx, privateMethods)
+  bindPublics(Object.keys(ctx.constructor.prototype), wrapper, ctx, privateMethods)
+  bindPublics(Object.getOwnPropertyNames(ctx), wrapper, ctx, privateMethods)
+  bindPublics(Object.getOwnPropertyNames(ctx.constructor.prototype), wrapper, ctx, privateMethods)
+
+  Object.defineProperties(wrapper, {
+    drawingBufferWidth: {
+      get () { return ctx.drawingBufferWidth },
+      set (value) { ctx.drawingBufferWidth = value }
+    },
+    drawingBufferHeight: {
+      get () { return ctx.drawingBufferHeight },
+      set (value) { ctx.drawingBufferHeight = value }
+    }
+  })
+
+  return wrapper
+}
+
+// We need to wrap some of the native WebGL functions to handle certain error codes and check input values
+class WebGLRenderingContext extends NativeWebGLRenderingContext {
+  _checkDimensions (
+    target,
+    width,
+    height,
+    level) {
+    if (level < 0 ||
+      width < 0 ||
+      height < 0) {
+      this.setError(gl.INVALID_VALUE)
+      return false
+    }
+    if (target === gl.TEXTURE_2D) {
+      if (width > this._maxTextureSize ||
+        height > this._maxTextureSize ||
+        level > this._maxTextureLevel) {
+        this.setError(gl.INVALID_VALUE)
+        return false
+      }
+    } else if (this._validCubeTarget(target)) {
+      if (width > this._maxCubeMapSize ||
+        height > this._maxCubeMapSize ||
+        level > this._maxCubeMapLevel) {
+        this.setError(gl.INVALID_VALUE)
+        return false
+      }
+    } else {
+      this.setError(gl.INVALID_ENUM)
+      return false
+    }
+    return true
+  }
+
+  _checkLocation (location) {
+    if (!(location instanceof WebGLUniformLocation)) {
+      this.setError(gl.INVALID_VALUE)
+      return false
+    } else if (location._program._ctx !== this ||
+      location._linkCount !== location._program._linkCount) {
+      this.setError(gl.INVALID_OPERATION)
+      return false
+    }
+    return true
+  }
+
+  _checkLocationActive (location) {
+    if (!location) {
+      return false
+    } else if (!this._checkLocation(location)) {
+      return false
+    } else if (location._program !== this._activeProgram) {
+      this.setError(gl.INVALID_OPERATION)
+      return false
+    }
+    return true
+  }
+
+  _checkOwns (object) {
+    return typeof object === 'object' &&
+      object._ctx === this
+  }
+
+  _checkShaderSource (shader) {
+    const source = shader._source
+    const tokens = tokenize(source)
+
+    let errorStatus = false
+    const errorLog = []
+
+    for (let i = 0; i < tokens.length; ++i) {
+      const tok = tokens[i]
+      switch (tok.type) {
+        case 'ident':
+          if (!this._validGLSLIdentifier(tok.data)) {
+            errorStatus = true
+            errorLog.push(tok.line + ':' + tok.column +
+              ' invalid identifier - ' + tok.data)
+          }
+          break
+        case 'preprocessor':
+          const bodyToks = tokenize(tok.data.match(/^\s*#\s*(.*)$/)[1])
+          for (let j = 0; j < bodyToks.length; ++j) {
+            const btok = bodyToks[j]
+            if (btok.type === 'ident' || btok.type === void 0) {
+              if (!this._validGLSLIdentifier(btok.data)) {
+                errorStatus = true
+                errorLog.push(tok.line + ':' + btok.column +
+                  ' invalid identifier - ' + btok.data)
+              }
+            }
+          }
+          break
+        case 'keyword':
+          switch (tok.data) {
+            case 'do':
+              errorStatus = true
+              errorLog.push(tok.line + ':' + tok.column + ' do not supported')
+              break
+          }
+          break
+      }
+    }
+
+    if (errorStatus) {
+      shader._compileInfo = errorLog.join('\n')
+    }
+    return !errorStatus
+  }
+
+  _checkStencilState () {
+    if (this.getParameter(gl.STENCIL_WRITEMASK) !==
+      this.getParameter(gl.STENCIL_BACK_WRITEMASK) ||
+      this.getParameter(gl.STENCIL_VALUE_MASK) !==
+      this.getParameter(gl.STENCIL_BACK_VALUE_MASK) ||
+      this.getParameter(gl.STENCIL_REF) !==
+      this.getParameter(gl.STENCIL_BACK_REF)) {
+      this.setError(gl.INVALID_OPERATION)
+      return false
+    }
+    return true
+  }
+
+  _checkTextureTarget (target) {
+    const unit = this._getActiveTextureUnit()
+    let tex = null
+    if (target === gl.TEXTURE_2D) {
+      tex = unit._bind2D
+    } else if (target === gl.TEXTURE_CUBE_MAP) {
+      tex = unit._bindCube
+    } else {
+      this.setError(gl.INVALID_ENUM)
+      return false
+    }
+    if (!tex) {
+      this.setError(gl.INVALID_OPERATION)
+      return false
+    }
+    return true
+  }
+
+  _checkWrapper (object, Wrapper) {
+    if (!this._checkValid(object, Wrapper)) {
+      this.setError(gl.INVALID_VALUE)
+      return false
+    } else if (!this._checkOwns(object)) {
+      this.setError(gl.INVALID_OPERATION)
+      return false
+    }
+    return true
+  }
+
+  _checkValid (object, Type) {
+    return object instanceof Type && object._ !== 0
+  }
+
+  _checkVertexAttribState (maxIndex) {
+    const program = this._activeProgram
+    if (!program) {
+      this.setError(gl.INVALID_OPERATION)
+      return false
+    }
+    const attribs = this._vertexAttribs
+    for (let i = 0; i < attribs.length; ++i) {
+      const attrib = attribs[i]
+      if (attrib._isPointer) {
+        const buffer = attrib._pointerBuffer
+        if (!buffer) {
+          this.setError(gl.INVALID_OPERATION)
+          return false
+        }
+        if (program._attributes.indexOf(i) >= 0) {
+          let maxByte = 0
+          if (attrib._divisor) {
+            maxByte = attrib._pointerSize +
+              attrib._pointerOffset
+          } else {
+            maxByte = attrib._pointerStride * maxIndex +
+              attrib._pointerSize +
+              attrib._pointerOffset
+          }
+          if (maxByte > buffer._size) {
+            this.setError(gl.INVALID_OPERATION)
+            return false
+          }
+        }
+      }
+    }
+    return true
+  }
+
+  _checkVertexIndex (index) {
+    if (index < 0 || index >= this._vertexAttribs.length) {
+      this.setError(gl.INVALID_VALUE)
+      return false
+    }
+    return true
+  }
+
+  _computePixelSize (type, internalFormat) {
+    const pixelSize = formatSize(internalFormat)
+    if (pixelSize === 0) {
+      this.setError(gl.INVALID_ENUM)
+      return 0
+    }
+    switch (type) {
+      case gl.UNSIGNED_BYTE:
+        return pixelSize
+      case gl.UNSIGNED_SHORT_5_6_5:
+        if (internalFormat !== gl.RGB) {
+          this.setError(gl.INVALID_OPERATION)
+          break
+        }
+        return 2
+      case gl.UNSIGNED_SHORT_4_4_4_4:
+      case gl.UNSIGNED_SHORT_5_5_5_1:
+        if (internalFormat !== gl.RGBA) {
+          this.setError(gl.INVALID_OPERATION)
+          break
+        }
+        return 2
+      case gl.FLOAT:
+        return 1
+    }
+    this.setError(gl.INVALID_ENUM)
+    return 0
+  }
+
+  _computeRowStride (width, pixelSize) {
+    let rowStride = width * pixelSize
+    if (rowStride % this._unpackAlignment) {
+      rowStride += this._unpackAlignment - (rowStride % this._unpackAlignment)
+    }
+    return rowStride
+  }
+
+  _fixupLink (program) {
+    if (!super.getProgramParameter(program._, gl.LINK_STATUS)) {
+      program._linkInfoLog = super.getProgramInfoLog(program)
+      return false
+    }
+
+    // Record attribute attributeLocations
+    const numAttribs = this.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES)
+    const names = new Array(numAttribs)
+    program._attributes.length = numAttribs
+    for (let i = 0; i < numAttribs; ++i) {
+      names[i] = this.getActiveAttrib(program, i).name
+      program._attributes[i] = this.getAttribLocation(program, names[i]) | 0
+    }
+
+    // Check attribute names
+    for (let i = 0; i < names.length; ++i) {
+      if (names[i].length > MAX_ATTRIBUTE_LENGTH) {
+        program._linkInfoLog = 'attribute ' + names[i] + ' is too long'
+        return false
+      }
+    }
+
+    for (let i = 0; i < numAttribs; ++i) {
+      super.bindAttribLocation(
+        program._ | 0,
+        program._attributes[i],
+        names[i])
+    }
+
+    super.linkProgram(program._ | 0)
+
+    const numUniforms = this.getProgramParameter(program, gl.ACTIVE_UNIFORMS)
+    program._uniforms.length = numUniforms
+    for (let i = 0; i < numUniforms; ++i) {
+      program._uniforms[i] = this.getActiveUniform(program, i)
+    }
+
+    // Check attribute and uniform name lengths
+    for (let i = 0; i < program._uniforms.length; ++i) {
+      if (program._uniforms[i].name.length > MAX_UNIFORM_LENGTH) {
+        program._linkInfoLog = 'uniform ' + program._uniforms[i].name + ' is too long'
+        return false
+      }
+    }
+
+    program._linkInfoLog = ''
+    return true
+  }
+
+  _framebufferOk () {
+    const framebuffer = this._activeFramebuffer
+    if (framebuffer &&
+      this._preCheckFramebufferStatus(framebuffer) !== gl.FRAMEBUFFER_COMPLETE) {
+      this.setError(gl.INVALID_FRAMEBUFFER_OPERATION)
+      return false
+    }
+    return true
+  }
+
+  _getActiveBuffer (target) {
+    if (target === gl.ARRAY_BUFFER) {
+      return this._activeArrayBuffer
+    } else if (target === gl.ELEMENT_ARRAY_BUFFER) {
+      return this._activeElementArrayBuffer
+    }
+    return null
+  }
+
+  _getActiveTextureUnit () {
+    return this._textureUnits[this._activeTextureUnit]
+  }
+
+  _getActiveTexture (target) {
+    const activeUnit = this._getActiveTextureUnit()
+    if (target === gl.TEXTURE_2D) {
+      return activeUnit._bind2D
+    } else if (target === gl.TEXTURE_CUBE_MAP) {
+      return activeUnit._bindCube
+    }
+    return null
+  }
+
+  _getAttachments () {
+    return this._extensions.webgl_draw_buffers ? this._extensions.webgl_draw_buffers._ALL_ATTACHMENTS : DEFAULT_ATTACHMENTS
+  }
+
+  _getColorAttachments () {
+    return this._extensions.webgl_draw_buffers ? this._extensions.webgl_draw_buffers._ALL_COLOR_ATTACHMENTS : DEFAULT_COLOR_ATTACHMENTS
+  }
+
+  _getParameterDirect (pname) {
+    return super.getParameter(pname)
+  }
+
+  _getTexImage (target) {
+    const unit = this._getActiveTextureUnit()
+    if (target === gl.TEXTURE_2D) {
+      return unit._bind2D
+    } else if (validCubeTarget(target)) {
+      return unit._bindCube
+    }
+    this.setError(gl.INVALID_ENUM)
+    return null
+  }
+
+  _preCheckFramebufferStatus (framebuffer) {
+    const attachments = framebuffer._attachments
+    const width = []
+    const height = []
+    const depthAttachment = attachments[gl.DEPTH_ATTACHMENT]
+    const depthStencilAttachment = attachments[gl.DEPTH_STENCIL_ATTACHMENT]
+    const stencilAttachment = attachments[gl.STENCIL_ATTACHMENT]
+
+    if ((depthStencilAttachment && (stencilAttachment || depthAttachment)) ||
+      (stencilAttachment && depthAttachment)) {
+      return gl.FRAMEBUFFER_UNSUPPORTED
+    }
+
+    const colorAttachments = this._getColorAttachments()
+    let colorAttachmentCount = 0
+    for (const attachmentEnum in attachments) {
+      if (attachments[attachmentEnum] && colorAttachments.indexOf(attachmentEnum * 1) !== -1) {
+        colorAttachmentCount++
+      }
+    }
+    if (colorAttachmentCount === 0) {
+      return gl.FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT
+    }
+
+    if (depthStencilAttachment instanceof WebGLTexture) {
+      return gl.FRAMEBUFFER_UNSUPPORTED
+    } else if (depthStencilAttachment instanceof WebGLRenderbuffer) {
+      if (depthStencilAttachment._format !== gl.DEPTH_STENCIL) {
+        return gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+      }
+      width.push(depthStencilAttachment._width)
+      height.push(depthStencilAttachment._height)
+    }
+
+    if (depthAttachment instanceof WebGLTexture) {
+      return gl.FRAMEBUFFER_UNSUPPORTED
+    } else if (depthAttachment instanceof WebGLRenderbuffer) {
+      if (depthAttachment._format !== gl.DEPTH_COMPONENT16) {
+        return gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+      }
+      width.push(depthAttachment._width)
+      height.push(depthAttachment._height)
+    }
+
+    if (stencilAttachment instanceof WebGLTexture) {
+      return gl.FRAMEBUFFER_UNSUPPORTED
+    } else if (stencilAttachment instanceof WebGLRenderbuffer) {
+      if (stencilAttachment._format !== gl.STENCIL_INDEX8) {
+        return gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+      }
+      width.push(stencilAttachment._width)
+      height.push(stencilAttachment._height)
+    }
+
+    let colorAttached = false
+    for (let i = 0; i < colorAttachments.length; ++i) {
+      const colorAttachment = attachments[colorAttachments[i]]
+      if (colorAttachment instanceof WebGLTexture) {
+        if (colorAttachment._format !== gl.RGBA ||
+          !(colorAttachment._type === gl.UNSIGNED_BYTE || colorAttachment._type === gl.FLOAT)) {
+          return gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+        }
+        colorAttached = true
+        const level = framebuffer._attachmentLevel[gl.COLOR_ATTACHMENT0]
+        width.push(colorAttachment._levelWidth[level])
+        height.push(colorAttachment._levelHeight[level])
+      } else if (colorAttachment instanceof WebGLRenderbuffer) {
+        const format = colorAttachment._format
+        if (format !== gl.RGBA4 &&
+          format !== gl.RGB565 &&
+          format !== gl.RGB5_A1) {
+          return gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+        }
+        colorAttached = true
+        width.push(colorAttachment._width)
+        height.push(colorAttachment._height)
+      }
+    }
+
+    if (!colorAttached &&
+      !stencilAttachment &&
+      !depthAttachment &&
+      !depthStencilAttachment) {
+      return gl.FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT
+    }
+
+    if (width.length <= 0 || height.length <= 0) {
+      return gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+    }
+
+    for (let i = 1; i < width.length; ++i) {
+      if (width[i - 1] !== width[i] ||
+        height[i - 1] !== height[i]) {
+        return gl.FRAMEBUFFER_INCOMPLETE_DIMENSIONS
+      }
+    }
+
+    if (width[0] === 0 || height[0] === 0) {
+      return gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+    }
+
+    framebuffer._width = width[0]
+    framebuffer._height = height[0]
+
+    return gl.FRAMEBUFFER_COMPLETE
+  }
+
+  _isConstantBlendFunc (factor) {
+    return (
+      factor === gl.CONSTANT_COLOR ||
+      factor === gl.ONE_MINUS_CONSTANT_COLOR ||
+      factor === gl.CONSTANT_ALPHA ||
+      factor === gl.ONE_MINUS_CONSTANT_ALPHA)
+  }
+
+  _isObject (object, method, Wrapper) {
+    if (!(object === null || object === void 0) &&
+      !(object instanceof Wrapper)) {
+      throw new TypeError(method + '(' + Wrapper.name + ')')
+    }
+    if (this._checkValid(object, Wrapper) && this._checkOwns(object)) {
+      return true
+    }
+    return false
+  }
+
+  _resizeDrawingBuffer (width, height) {
+    const prevFramebuffer = this._activeFramebuffer
+    const prevTexture = this._getActiveTexture(gl.TEXTURE_2D)
+    const prevRenderbuffer = this._activeRenderbuffer
+
+    const contextAttributes = this._contextAttributes
+
+    const drawingBuffer = this._drawingBuffer
+    super.bindFramebuffer(gl.FRAMEBUFFER, drawingBuffer._framebuffer)
+    const attachments = this._getAttachments()
+    // Clear all attachments
+    for (let i = 0; i < attachments.length; ++i) {
+      super.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        attachments[i],
+        gl.TEXTURE_2D,
+        0,
+        0)
+    }
+
+    // Update color attachment
+    super.bindTexture(gl.TEXTURE_2D, drawingBuffer._color)
+    const colorFormat = contextAttributes.alpha ? gl.RGBA : gl.RGB
+    super.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      colorFormat,
+      width,
+      height,
+      0,
+      colorFormat,
+      gl.UNSIGNED_BYTE,
+      null)
+    super.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    super.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    super.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      drawingBuffer._color,
+      0)
+
+    // Update depth-stencil attachments if needed
+    let storage = 0
+    let attachment = 0
+    if (contextAttributes.depth && contextAttributes.stencil) {
+      storage = gl.DEPTH_STENCIL
+      attachment = gl.DEPTH_STENCIL_ATTACHMENT
+    } else if (contextAttributes.depth) {
+      storage = 0x81A7
+      attachment = gl.DEPTH_ATTACHMENT
+    } else if (contextAttributes.stencil) {
+      storage = gl.STENCIL_INDEX8
+      attachment = gl.STENCIL_ATTACHMENT
+    }
+
+    if (storage) {
+      super.bindRenderbuffer(
+        gl.RENDERBUFFER,
+        drawingBuffer._depthStencil)
+      super.renderbufferStorage(
+        gl.RENDERBUFFER,
+        storage,
+        width,
+        height)
+      super.framebufferRenderbuffer(
+        gl.FRAMEBUFFER,
+        attachment,
+        gl.RENDERBUFFER,
+        drawingBuffer._depthStencil)
+    }
+
+    // Restore previous binding state
+    this.bindFramebuffer(gl.FRAMEBUFFER, prevFramebuffer)
+    this.bindTexture(gl.TEXTURE_2D, prevTexture)
+    this.bindRenderbuffer(gl.RENDERBUFFER, prevRenderbuffer)
+  }
+
+  _restoreError (lastError) {
+    const topError = this._errorStack.pop()
+    if (topError === gl.NO_ERROR) {
+      this.setError(lastError)
+    } else {
+      this.setError(topError)
+    }
+  }
+
+  _saveError () {
+    this._errorStack.push(this.getError())
+  }
+
+  _switchActiveBuffer (active, buffer) {
+    if (active !== buffer) {
+      if (active) {
+        active._refCount -= 1
+        active._checkDelete()
+      }
+      if (buffer) {
+        buffer._refCount += 1
+      }
+    }
+  }
+
+  _switchActiveProgram (active) {
+    if (active) {
+      active._refCount -= 1
+      active._checkDelete()
+    }
+  }
+
+  _tryDetachFramebuffer (framebuffer, renderbuffer) {
+    // FIXME: Does the texture get unbound from *all* framebuffers, or just the
+    // active FBO?
+    if (framebuffer && framebuffer._linked(renderbuffer)) {
+      const attachments = this._getAttachments()
+      const framebufferAttachments = Object.keys(framebuffer._attachments)
+      for (let i = 0; i < framebufferAttachments.length; ++i) {
+        if (framebuffer._attachments[attachments[i]] === renderbuffer) {
+          this.framebufferTexture2D(
+            gl.FRAMEBUFFER,
+            attachments[i] | 0,
+            gl.TEXTURE_2D,
+            null)
+        }
+      }
+    }
+  }
+
+  _updateFramebufferAttachments (framebuffer) {
+    const prevStatus = framebuffer._status
+    const attachments = this._getAttachments()
+    framebuffer._status = this._preCheckFramebufferStatus(framebuffer)
+    if (framebuffer._status !== gl.FRAMEBUFFER_COMPLETE) {
+      if (prevStatus === gl.FRAMEBUFFER_COMPLETE) {
+        for (let i = 0; i < attachments.length; ++i) {
+          const attachmentEnum = attachments[i]
+          super.framebufferTexture2D(
+            gl.FRAMEBUFFER,
+            attachmentEnum,
+            framebuffer._attachmentFace[attachmentEnum],
+            0,
+            framebuffer._attachmentLevel[attachmentEnum])
+        }
+      }
+      return
+    }
+
+    for (let i = 0; i < attachments.length; ++i) {
+      const attachmentEnum = attachments[i]
+      super.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        attachmentEnum,
+        framebuffer._attachmentFace[attachmentEnum],
+        0,
+        framebuffer._attachmentLevel[attachmentEnum])
+    }
+
+    for (let i = 0; i < attachments.length; ++i) {
+      const attachmentEnum = attachments[i]
+      const attachment = framebuffer._attachments[attachmentEnum]
+      if (attachment instanceof WebGLTexture) {
+        super.framebufferTexture2D(
+          gl.FRAMEBUFFER,
+          attachmentEnum,
+          framebuffer._attachmentFace[attachmentEnum],
+          attachment._ | 0,
+          framebuffer._attachmentLevel[attachmentEnum])
+      } else if (attachment instanceof WebGLRenderbuffer) {
+        super.framebufferRenderbuffer(
+          gl.FRAMEBUFFER,
+          attachmentEnum,
+          gl.RENDERBUFFER,
+          attachment._ | 0)
+      }
+    }
+  }
+
+  _validBlendFunc (factor) {
+    return factor === gl.ZERO ||
+      factor === gl.ONE ||
+      factor === gl.SRC_COLOR ||
+      factor === gl.ONE_MINUS_SRC_COLOR ||
+      factor === gl.DST_COLOR ||
+      factor === gl.ONE_MINUS_DST_COLOR ||
+      factor === gl.SRC_ALPHA ||
+      factor === gl.ONE_MINUS_SRC_ALPHA ||
+      factor === gl.DST_ALPHA ||
+      factor === gl.ONE_MINUS_DST_ALPHA ||
+      factor === gl.SRC_ALPHA_SATURATE ||
+      factor === gl.CONSTANT_COLOR ||
+      factor === gl.ONE_MINUS_CONSTANT_COLOR ||
+      factor === gl.CONSTANT_ALPHA ||
+      factor === gl.ONE_MINUS_CONSTANT_ALPHA
+  }
+
+  _validBlendMode (mode) {
+    return mode === gl.FUNC_ADD ||
+      mode === gl.FUNC_SUBTRACT ||
+      mode === gl.FUNC_REVERSE_SUBTRACT
+  }
+
+  _validCubeTarget (target) {
+    return target === gl.TEXTURE_CUBE_MAP_POSITIVE_X ||
+      target === gl.TEXTURE_CUBE_MAP_NEGATIVE_X ||
+      target === gl.TEXTURE_CUBE_MAP_POSITIVE_Y ||
+      target === gl.TEXTURE_CUBE_MAP_NEGATIVE_Y ||
+      target === gl.TEXTURE_CUBE_MAP_POSITIVE_Z ||
+      target === gl.TEXTURE_CUBE_MAP_NEGATIVE_Z
+  }
+
+  _validFramebufferAttachment (attachment) {
+    switch (attachment) {
+      case gl.DEPTH_ATTACHMENT:
+      case gl.STENCIL_ATTACHMENT:
+      case gl.DEPTH_STENCIL_ATTACHMENT:
+      case gl.COLOR_ATTACHMENT0:
+        return true
+    }
+
+    if (this._extensions.webgl_draw_buffers) { // eslint-disable-line
+      const { webgl_draw_buffers } = this._extensions; // eslint-disable-line
+      return attachment < (webgl_draw_buffers.COLOR_ATTACHMENT0_WEBGL + webgl_draw_buffers._maxDrawBuffers) // eslint-disable-line
+    }
+
+    return false
+  }
+
+  _validGLSLIdentifier (str) {
+    return !(str.indexOf('webgl_') === 0 ||
+      str.indexOf('_webgl_') === 0 ||
+      str.length > 256)
+  }
+
+  _validTextureTarget (target) {
+    return target === gl.TEXTURE_2D ||
+      target === gl.TEXTURE_CUBE_MAP
+  }
+
+  _verifyTextureCompleteness (target, pname, param) {
+    const unit = this._getActiveTextureUnit()
+    let texture = null
+    if (target === gl.TEXTURE_2D) {
+      texture = unit._bind2D
+    } else if (this._validCubeTarget(target)) {
+      texture = unit._bindCube
+    }
+
+    // oes_texture_float
+    if (this._extensions.oes_texture_float && texture && texture._type === gl.FLOAT && (pname === gl.TEXTURE_MAG_FILTER || pname === gl.TEXTURE_MIN_FILTER) && (param === gl.LINEAR || param === gl.LINEAR_MIPMAP_NEAREST || param === gl.NEAREST_MIPMAP_LINEAR || param === gl.LINEAR_MIPMAP_LINEAR)) {
+      texture._complete = false
+      this.bindTexture(target, texture)
+      return
+    }
+
+    if (texture && texture._complete === false) {
+      texture._complete = true
+      this.bindTexture(target, texture)
+    }
+  }
+
+  _wrapShader (type, source) { // eslint-disable-line
+    if (this._extensions.webgl_draw_buffers) { // eslint-disable-line
+      return source
+    }
+    return this._extensions.webgl_draw_buffers ? source : '#define gl_MaxDrawBuffers 1\n' + source // eslint-disable-line
+  }
+
+  _beginAttrib0Hack () {
+    super.bindBuffer(gl.ARRAY_BUFFER, this._attrib0Buffer._)
+    super.bufferData(
+      gl.ARRAY_BUFFER,
+      this._vertexAttribs[0]._data,
+      gl.STREAM_DRAW)
+    super.enableVertexAttribArray(0)
+    super.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0)
+    super._vertexAttribDivisor(0, 1)
+  }
+
+  _endAttrib0Hack () {
+    const attrib = this._vertexAttribs[0]
+    if (attrib._pointerBuffer) {
+      super.bindBuffer(gl.ARRAY_BUFFER, attrib._pointerBuffer._)
+    } else {
+      super.bindBuffer(gl.ARRAY_BUFFER, 0)
+    }
+    super.vertexAttribPointer(
+      0,
+      attrib._inputSize,
+      attrib._pointerType,
+      attrib._pointerNormal,
+      attrib._inputStride,
+      attrib._pointerOffset)
+    super._vertexAttribDivisor(0, attrib._divisor)
+    super.disableVertexAttribArray(0)
+    if (this._activeArrayBuffer) {
+      super.bindBuffer(gl.ARRAY_BUFFER, this._activeArrayBuffer._)
+    } else {
+      super.bindBuffer(gl.ARRAY_BUFFER, 0)
+    }
+  }
+
+  activeTexture (texture) {
+    texture |= 0
+    const texNum = texture - gl.TEXTURE0
+    if (texNum >= 0 && texNum < this._textureUnits.length) {
+      this._activeTextureUnit = texNum
+      return super.activeTexture(texture)
+    }
+
+    this.setError(gl.INVALID_ENUM)
+  }
+
+  attachShader (program, shader) {
+    if (!checkObject(program) ||
+      !checkObject(shader)) {
+      throw new TypeError('attachShader(WebGLProgram, WebGLShader)')
+    }
+    if (!program || !shader) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    } else if (program instanceof WebGLProgram &&
+      shader instanceof WebGLShader &&
+      this._checkOwns(program) &&
+      this._checkOwns(shader)) {
+      if (!program._linked(shader)) {
+        this._saveError()
+        super.attachShader(
+          program._ | 0,
+          shader._ | 0)
+        const error = this.getError()
+        this._restoreError(error)
+        if (error === gl.NO_ERROR) {
+          program._link(shader)
+        }
+        return
+      }
+    }
+    this.setError(gl.INVALID_OPERATION)
+  }
+
+  bindAttribLocation (program, index, name) {
+    if (!checkObject(program) ||
+      typeof name !== 'string') {
+      throw new TypeError('bindAttribLocation(WebGLProgram, GLint, String)')
+    }
+    name += ''
+    if (!isValidString(name) || name.length > MAX_ATTRIBUTE_LENGTH) {
+      this.setError(gl.INVALID_VALUE)
+    } else if (/^_?webgl_a/.test(name)) {
+      this.setError(gl.INVALID_OPERATION)
+    } else if (this._checkWrapper(program, WebGLProgram)) {
+      return super.bindAttribLocation(
+        program._ | 0,
+        index | 0,
+        name)
+    }
+  }
+
+  bindFramebuffer (target, framebuffer) {
+    if (!checkObject(framebuffer)) {
+      throw new TypeError('bindFramebuffer(GLenum, WebGLFramebuffer)')
+    }
+    if (target !== gl.FRAMEBUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+    if (!framebuffer) {
+      super.bindFramebuffer(
+        gl.FRAMEBUFFER,
+        this._drawingBuffer._framebuffer)
+    } else if (framebuffer._pendingDelete) {
+      return
+    } else if (this._checkWrapper(framebuffer, WebGLFramebuffer)) {
+      super.bindFramebuffer(
+        gl.FRAMEBUFFER,
+        framebuffer._ | 0)
+    } else {
+      return
+    }
+    const activeFramebuffer = this._activeFramebuffer
+    if (activeFramebuffer !== framebuffer) {
+      if (activeFramebuffer) {
+        activeFramebuffer._refCount -= 1
+        activeFramebuffer._checkDelete()
+      }
+      if (framebuffer) {
+        framebuffer._refCount += 1
+      }
+    }
+    this._activeFramebuffer = framebuffer
+    if (framebuffer) {
+      this._updateFramebufferAttachments(framebuffer)
+    }
+  }
+
+  bindBuffer (target, buffer) {
+    target |= 0
+    if (!checkObject(buffer)) {
+      throw new TypeError('bindBuffer(GLenum, WebGLBuffer)')
+    }
+    if (target !== gl.ARRAY_BUFFER &&
+      target !== gl.ELEMENT_ARRAY_BUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (!buffer) {
+      super.bindBuffer(target, 0)
+    } else if (buffer._pendingDelete) {
+      return
+    } else if (this._checkWrapper(buffer, WebGLBuffer)) {
+      if (buffer._binding && buffer._binding !== target) {
+        this.setError(gl.INVALID_OPERATION)
+        return
+      }
+      buffer._binding = target | 0
+
+      super.bindBuffer(target, buffer._ | 0)
+    } else {
+      return
+    }
+
+    if (target === gl.ARRAY_BUFFER) {
+      this._switchActiveBuffer(this._activeArrayBuffer, buffer)
+      this._activeArrayBuffer = buffer
+    } else {
+      this._switchActiveBuffer(this._activeElementArrayBuffer, buffer)
+      this._activeElementArrayBuffer = buffer
+    }
+  }
+
+  bindRenderbuffer (target, object) {
+    if (!checkObject(object)) {
+      throw new TypeError('bindRenderbuffer(GLenum, WebGLRenderbuffer)')
+    }
+
+    if (target !== gl.RENDERBUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (!object) {
+      super.bindRenderbuffer(
+        target | 0,
+        0)
+    } else if (object._pendingDelete) {
+      return
+    } else if (this._checkWrapper(object, WebGLRenderbuffer)) {
+      super.bindRenderbuffer(
+        target | 0,
+        object._ | 0)
+    } else {
+      return
+    }
+    const active = this._activeRenderbuffer
+    if (active !== object) {
+      if (active) {
+        active._refCount -= 1
+        active._checkDelete()
+      }
+      if (object) {
+        object._refCount += 1
+      }
+    }
+    this._activeRenderbuffer = object
+  }
+
+  bindTexture (target, texture) {
+    target |= 0
+
+    if (!checkObject(texture)) {
+      throw new TypeError('bindTexture(GLenum, WebGLTexture)')
+    }
+
+    if (!this._validTextureTarget(target)) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    // Get texture id
+    let textureId = 0
+    if (!texture) {
+      texture = null
+    } else if (texture instanceof WebGLTexture &&
+      texture._pendingDelete) {
+      // Special case: error codes for deleted textures don't get set for some dumb reason
+      return
+    } else if (this._checkWrapper(texture, WebGLTexture)) {
+      // Check binding mode of texture
+      if (texture._binding && texture._binding !== target) {
+        this.setError(gl.INVALID_OPERATION)
+        return
+      }
+      texture._binding = target
+
+      if (texture._complete) {
+        textureId = texture._ | 0
+      }
+    } else {
+      return
+    }
+
+    this._saveError()
+    super.bindTexture(
+      target,
+      textureId)
+    const error = this.getError()
+    this._restoreError(error)
+
+    if (error !== gl.NO_ERROR) {
+      return
+    }
+
+    const activeUnit = this._getActiveTextureUnit()
+    const activeTex = this._getActiveTexture(target)
+
+    // Update references
+    if (activeTex !== texture) {
+      if (activeTex) {
+        activeTex._refCount -= 1
+        activeTex._checkDelete()
+      }
+      if (texture) {
+        texture._refCount += 1
+      }
+    }
+
+    if (target === gl.TEXTURE_2D) {
+      activeUnit._bind2D = texture
+    } else if (target === gl.TEXTURE_CUBE_MAP) {
+      activeUnit._bindCube = texture
+    }
+  }
+
+  blendColor (red, green, blue, alpha) {
+    return super.blendColor(+red, +green, +blue, +alpha)
+  }
+
+  blendEquation (mode) {
+    mode |= 0
+    if (this._validBlendMode(mode)) {
+      return super.blendEquation(mode)
+    }
+    this.setError(gl.INVALID_ENUM)
+  }
+
+  blendEquationSeparate (modeRGB, modeAlpha) {
+    modeRGB |= 0
+    modeAlpha |= 0
+    if (this._validBlendMode(modeRGB) && this._validBlendMode(modeAlpha)) {
+      return super.blendEquationSeparate(modeRGB, modeAlpha)
+    }
+    this.setError(gl.INVALID_ENUM)
+  }
+
+  createBuffer () {
+    const id = super.createBuffer()
+    if (id <= 0) return null
+    const webGLBuffer = new WebGLBuffer(id, this)
+    this._buffers[id] = webGLBuffer
+    return webGLBuffer
+  }
+
+  createFramebuffer () {
+    const id = super.createFramebuffer()
+    if (id <= 0) return null
+    const webGLFramebuffer = new WebGLFramebuffer(id, this)
+    this._framebuffers[id] = webGLFramebuffer
+    return webGLFramebuffer
+  }
+
+  createProgram () {
+    const id = super.createProgram()
+    if (id <= 0) return null
+    const webGLProgram = new WebGLProgram(id, this)
+    this._programs[id] = webGLProgram
+    return webGLProgram
+  }
+
+  createRenderbuffer () {
+    const id = super.createRenderbuffer()
+    if (id <= 0) return null
+    const webGLRenderbuffer = new WebGLRenderbuffer(id, this)
+    this._renderbuffers[id] = webGLRenderbuffer
+    return webGLRenderbuffer
+  }
+
+  createTexture () {
+    const id = super.createTexture()
+    if (id <= 0) return null
+    const webGlTexture = new WebGLTexture(id, this)
+    this._textures[id] = webGlTexture
+    return webGlTexture
+  }
+
+  getContextAttributes () {
+    return this._contextAttributes
+  }
+
+  getExtension (name) {
+    const str = name.toLowerCase()
+    if (str in this._extensions) {
+      return this._extensions[str]
+    }
+    let ext = availableExtensions[str] ? availableExtensions[str](this) : null
+    if (ext) {
+      this._extensions[str] = ext
+    }
+    return ext
+  }
+
+  getSupportedExtensions () {
+    const exts = [
+      'ANGLE_instanced_arrays',
+      'STACKGL_resize_drawingbuffer',
+      'STACKGL_destroy_context'
+    ]
+
+    const supportedExts = super.getSupportedExtensions()
+
+    if (supportedExts.indexOf('GL_OES_element_index_uint') >= 0) {
+      exts.push('OES_element_index_uint')
+    }
+
+    if (supportedExts.indexOf('GL_OES_texture_float') >= 0) {
+      exts.push('OES_texture_float')
+    }
+
+    if (supportedExts.indexOf('EXT_draw_buffers') >= 0) {
+      exts.push('WEBGL_draw_buffers')
+    }
+
+    return exts
+  }
+
+  setError (error) {
+    NativeWebGL.setError.call(this, error | 0)
+  }
+
+  blendFunc (sfactor, dfactor) {
+    sfactor |= 0
+    dfactor |= 0
+    if (!this._validBlendFunc(sfactor) ||
+      !this._validBlendFunc(dfactor)) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+    if (this._isConstantBlendFunc(sfactor) && this._isConstantBlendFunc(dfactor)) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+    super.blendFunc(sfactor, dfactor)
+  }
+
+  blendFuncSeparate (
+    srcRGB,
+    dstRGB,
+    srcAlpha,
+    dstAlpha) {
+    srcRGB |= 0
+    dstRGB |= 0
+    srcAlpha |= 0
+    dstAlpha |= 0
+
+    if (!(this._validBlendFunc(srcRGB) &&
+      this._validBlendFunc(dstRGB) &&
+      this._validBlendFunc(srcAlpha) &&
+      this._validBlendFunc(dstAlpha))) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if ((this._isConstantBlendFunc(srcRGB) && this._isConstantBlendFunc(dstRGB)) ||
+      (this._isConstantBlendFunc(srcAlpha) && this._isConstantBlendFunc(dstAlpha))) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    super.blendFuncSeparate(
+      srcRGB,
+      dstRGB,
+      srcAlpha,
+      dstAlpha)
+  }
+
+  bufferData (target, data, usage) {
+    target |= 0
+    usage |= 0
+    if (usage !== gl.STREAM_DRAW &&
+      usage !== gl.STATIC_DRAW &&
+      usage !== gl.DYNAMIC_DRAW) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (target !== gl.ARRAY_BUFFER &&
+      target !== gl.ELEMENT_ARRAY_BUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    const active = this._getActiveBuffer(target)
+    if (!active) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (typeof data === 'object') {
+      let u8Data = null
+      if (isTypedArray(data)) {
+        u8Data = unpackTypedArray(data)
+      } else if (data instanceof ArrayBuffer) {
+        u8Data = new Uint8Array(data)
+      } else {
+        this.setError(gl.INVALID_VALUE)
+        return
+      }
+
+      this._saveError()
+      super.bufferData(
+        target,
+        u8Data,
+        usage)
+      const error = this.getError()
+      this._restoreError(error)
+      if (error !== gl.NO_ERROR) {
+        return
+      }
+
+      active._size = u8Data.length
+      if (target === gl.ELEMENT_ARRAY_BUFFER) {
+        active._elements = new Uint8Array(u8Data)
+      }
+    } else if (typeof data === 'number') {
+      const size = data | 0
+      if (size < 0) {
+        this.setError(gl.INVALID_VALUE)
+        return
+      }
+
+      this._saveError()
+      super.bufferData(
+        target,
+        size,
+        usage)
+      const error = this.getError()
+      this._restoreError(error)
+      if (error !== gl.NO_ERROR) {
+        return
+      }
+
+      active._size = size
+      if (target === gl.ELEMENT_ARRAY_BUFFER) {
+        active._elements = new Uint8Array(size)
+      }
+    } else {
+      this.setError(gl.INVALID_VALUE)
+    }
+  }
+
+  bufferSubData (target, offset, data) {
+    target |= 0
+    offset |= 0
+
+    if (target !== gl.ARRAY_BUFFER &&
+      target !== gl.ELEMENT_ARRAY_BUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (data === null) {
+      return
+    }
+
+    if (!data || typeof data !== 'object') {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    const active = this._getActiveBuffer(target)
+    if (!active) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (offset < 0 || offset >= active._size) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    let u8Data = null
+    if (isTypedArray(data)) {
+      u8Data = unpackTypedArray(data)
+    } else if (data instanceof ArrayBuffer) {
+      u8Data = new Uint8Array(data)
+    } else {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    if (offset + u8Data.length > active._size) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    if (target === gl.ELEMENT_ARRAY_BUFFER) {
+      active._elements.set(u8Data, offset)
+    }
+
+    super.bufferSubData(
+      target,
+      offset,
+      u8Data)
+  }
+
+  checkFramebufferStatus (target) {
+    if (target !== gl.FRAMEBUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return 0
+    }
+
+    const framebuffer = this._activeFramebuffer
+    if (!framebuffer) {
+      return gl.FRAMEBUFFER_COMPLETE
+    }
+
+    return this._preCheckFramebufferStatus(framebuffer)
+  }
+
+  clear (mask) {
+    if (!this._framebufferOk()) {
+      return
+    }
+    return super.clear(mask | 0)
+  }
+
+  clearColor (red, green, blue, alpha) {
+    return super.clearColor(+red, +green, +blue, +alpha)
+  }
+
+  clearDepth (depth) {
+    return super.clearDepth(+depth)
+  }
+
+  clearStencil (s) {
+    return super.clearStencil(s | 0)
+  }
+
+  colorMask (red, green, blue, alpha) {
+    return super.colorMask(!!red, !!green, !!blue, !!alpha)
+  }
+
+  compileShader (shader) {
+    if (!checkObject(shader)) {
+      throw new TypeError('compileShader(WebGLShader)')
+    }
+    if (this._checkWrapper(shader, WebGLShader) &&
+      this._checkShaderSource(shader)) {
+      const prevError = this.getError()
+      super.compileShader(shader._ | 0)
+      const error = this.getError()
+      shader._compileStatus = !!super.getShaderParameter(
+        shader._ | 0,
+        gl.COMPILE_STATUS)
+      shader._compileInfo = super.getShaderInfoLog(shader._ | 0)
+      this.getError()
+      this.setError(prevError || error)
+    }
+  }
+
+  copyTexImage2D (
+    target,
+    level,
+    internalFormat,
+    x, y, width, height,
+    border) {
+    target |= 0
+    level |= 0
+    internalFormat |= 0
+    x |= 0
+    y |= 0
+    width |= 0
+    height |= 0
+    border |= 0
+
+    const texture = this._getTexImage(target)
+    if (!texture) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (internalFormat !== gl.RGBA &&
+      internalFormat !== gl.RGB &&
+      internalFormat !== gl.ALPHA &&
+      internalFormat !== gl.LUMINANCE &&
+      internalFormat !== gl.LUMINANCE_ALPHA) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (level < 0 || width < 0 || height < 0 || border !== 0) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    if (level > 0 && !(bits.isPow2(width) && bits.isPow2(height))) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    this._saveError()
+    super.copyTexImage2D(
+      target,
+      level,
+      internalFormat,
+      x,
+      y,
+      width,
+      height,
+      border)
+    const error = this.getError()
+    this._restoreError(error)
+
+    if (error === gl.NO_ERROR) {
+      texture._levelWidth[level] = width
+      texture._levelHeight[level] = height
+      texture._format = gl.RGBA
+      texture._type = gl.UNSIGNED_BYTE
+    }
+  }
+
+  copyTexSubImage2D (
+    target,
+    level,
+    xoffset, yoffset,
+    x, y, width, height) {
+    target |= 0
+    level |= 0
+    xoffset |= 0
+    yoffset |= 0
+    x |= 0
+    y |= 0
+    width |= 0
+    height |= 0
+
+    const texture = this._getTexImage(target)
+    if (!texture) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (width < 0 || height < 0 || xoffset < 0 || yoffset < 0 || level < 0) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    super.copyTexSubImage2D(
+      target,
+      level,
+      xoffset,
+      yoffset,
+      x,
+      y,
+      width,
+      height)
+  }
+
+  cullFace (mode) {
+    return super.cullFace(mode | 0)
+  }
+
+  createShader (type) {
+    type |= 0
+    if (type !== gl.FRAGMENT_SHADER &&
+      type !== gl.VERTEX_SHADER) {
+      this.setError(gl.INVALID_ENUM)
+      return null
+    }
+    const id = super.createShader(type)
+    if (id < 0) {
+      return null
+    }
+    const result = new WebGLShader(id, this, type)
+    this._shaders[id] = result
+    return result
+  }
+
+  deleteProgram (object) {
+    return this._deleteLinkable('deleteProgram', object, WebGLProgram)
+  }
+
+  deleteShader (object) {
+    return this._deleteLinkable('deleteShader', object, WebGLShader)
+  }
+
+  _deleteLinkable (name, object, Type) {
+    if (!checkObject(object)) {
+      throw new TypeError(name + '(' + Type.name + ')')
+    }
+    if (object instanceof Type &&
+      this._checkOwns(object)) {
+      object._pendingDelete = true
+      object._checkDelete()
+      return
+    }
+    this.setError(gl.INVALID_OPERATION)
+  }
+
+  deleteBuffer (buffer) {
+    if (!checkObject(buffer) ||
+      (buffer !== null && !(buffer instanceof WebGLBuffer))) {
+      throw new TypeError('deleteBuffer(WebGLBuffer)')
+    }
+
+    if (!(buffer instanceof WebGLBuffer &&
+      this._checkOwns(buffer))) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (this._activeArrayBuffer === buffer) {
+      this.bindBuffer(gl.ARRAY_BUFFER, null)
+    }
+    if (this._activeElementArrayBuffer === buffer) {
+      this.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null)
+    }
+
+    for (let i = 0; i < this._vertexAttribs.length; ++i) {
+      const attrib = this._vertexAttribs[i]
+      if (attrib._pointerBuffer === buffer) {
+        attrib._pointerBuffer = null
+        attrib._pointerStride = 0
+        attrib._pointerOffset = 0
+        attrib._pointerSize = 4
+        buffer._refCount -= 1
+      }
+    }
+
+    buffer._pendingDelete = true
+    buffer._checkDelete()
+  }
+
+  deleteFramebuffer (framebuffer) {
+    if (!checkObject(framebuffer)) {
+      throw new TypeError('deleteFramebuffer(WebGLFramebuffer)')
+    }
+
+    if (!(framebuffer instanceof WebGLFramebuffer &&
+      this._checkOwns(framebuffer))) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (this._activeFramebuffer === framebuffer) {
+      this.bindFramebuffer(gl.FRAMEBUFFER, null)
+    }
+
+    framebuffer._pendingDelete = true
+    framebuffer._checkDelete()
+  }
+
+  // Need to handle textures and render buffers as a special case:
+  // When a texture gets deleted, we need to do the following extra steps:
+  //  1. Is it bound to the current texture unit?
+  //     If so, then unbind it
+  //  2. Is it attached to the active fbo?
+  //     If so, then detach it
+  //
+  // For renderbuffers only need to do second step
+  //
+  // After this, proceed with the usual deletion algorithm
+  //
+  deleteRenderbuffer (renderbuffer) {
+    if (!checkObject(renderbuffer)) {
+      throw new TypeError('deleteRenderbuffer(WebGLRenderbuffer)')
+    }
+
+    if (!(renderbuffer instanceof WebGLRenderbuffer &&
+      this._checkOwns(renderbuffer))) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (this._activeRenderbuffer === renderbuffer) {
+      this.bindRenderbuffer(gl.RENDERBUFFER, null)
+    }
+
+    const activeFramebuffer = this._activeFramebuffer
+
+    this._tryDetachFramebuffer(activeFramebuffer, renderbuffer)
+
+    renderbuffer._pendingDelete = true
+    renderbuffer._checkDelete()
+  }
+
+  deleteTexture (texture) {
+    if (!checkObject(texture)) {
+      throw new TypeError('deleteTexture(WebGLTexture)')
+    }
+
+    if (texture instanceof WebGLTexture) {
+      if (!this._checkOwns(texture)) {
+        this.setError(gl.INVALID_OPERATION)
+        return
+      }
+    } else {
+      return
+    }
+
+    // Unbind from all texture units
+    const curActive = this._activeTextureUnit
+
+    for (let i = 0; i < this._textureUnits.length; ++i) {
+      const unit = this._textureUnits[i]
+      if (unit._bind2D === texture) {
+        this.activeTexture(gl.TEXTURE0 + i)
+        this.bindTexture(gl.TEXTURE_2D, null)
+      } else if (unit._bindCube === texture) {
+        this.activeTexture(gl.TEXTURE0 + i)
+        this.bindTexture(gl.TEXTURE_CUBE_MAP, null)
+      }
+    }
+    this.activeTexture(gl.TEXTURE0 + curActive)
+
+    // FIXME: Does the texture get unbound from *all* framebuffers, or just the
+    // active FBO?
+    const ctx = this
+    const activeFramebuffer = this._activeFramebuffer
+    function tryDetach (framebuffer) {
+      if (framebuffer && framebuffer._linked(texture)) {
+        const attachments = ctx._getAttachments()
+        for (let i = 0; i < attachments.length; ++i) {
+          const attachment = attachments[i]
+          if (framebuffer._attachments[attachment] === texture) {
+            ctx.framebufferTexture2D(
+              gl.FRAMEBUFFER,
+              attachment,
+              gl.TEXTURE_2D,
+              null)
+          }
+        }
+      }
+    }
+
+    tryDetach(activeFramebuffer)
+
+    // Mark texture for deletion
+    texture._pendingDelete = true
+    texture._checkDelete()
+  }
+
+  depthFunc (func) {
+    func |= 0
+    switch (func) {
+      case gl.NEVER:
+      case gl.LESS:
+      case gl.EQUAL:
+      case gl.LEQUAL:
+      case gl.GREATER:
+      case gl.NOTEQUAL:
+      case gl.GEQUAL:
+      case gl.ALWAYS:
+        return super.depthFunc(func)
+      default:
+        this.setError(gl.INVALID_ENUM)
+    }
+  }
+
+  depthMask (flag) {
+    return super.depthMask(!!flag)
+  }
+
+  depthRange (zNear, zFar) {
+    zNear = +zNear
+    zFar = +zFar
+    if (zNear <= zFar) {
+      return super.depthRange(zNear, zFar)
+    }
+    this.setError(gl.INVALID_OPERATION)
+  }
+
+  destroy () {
+    super.destroy()
+  }
+
+  detachShader (program, shader) {
+    if (!checkObject(program) ||
+      !checkObject(shader)) {
+      throw new TypeError('detachShader(WebGLProgram, WebGLShader)')
+    }
+    if (this._checkWrapper(program, WebGLProgram) &&
+      this._checkWrapper(shader, WebGLShader)) {
+      if (program._linked(shader)) {
+        super.detachShader(program._, shader._)
+        program._unlink(shader)
+      } else {
+        this.setError(gl.INVALID_OPERATION)
+      }
+    }
+  }
+
+  disable (cap) {
+    cap |= 0
+    super.disable(cap)
+    if (cap === gl.TEXTURE_2D ||
+      cap === gl.TEXTURE_CUBE_MAP) {
+      const active = this._getActiveTextureUnit()
+      if (active._mode === cap) {
+        active._mode = 0
+      }
+    }
+  }
+
+  disableVertexAttribArray (index) {
+    index |= 0
+    if (index < 0 || index >= this._vertexAttribs.length) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+    super.disableVertexAttribArray(index)
+    this._vertexAttribs[index]._isPointer = false
+  }
+
+  drawArrays (mode, first, count) {
+    mode |= 0
+    first |= 0
+    count |= 0
+
+    if (first < 0 || count < 0) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    if (!this._checkStencilState()) {
+      return
+    }
+
+    const reducedCount = vertexCount(mode, count)
+    if (reducedCount < 0) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (!this._framebufferOk()) {
+      return
+    }
+
+    if (count === 0) {
+      return
+    }
+
+    let maxIndex = first
+    if (count > 0) {
+      maxIndex = (count + first - 1) >>> 0
+    }
+    if (this._checkVertexAttribState(maxIndex)) {
+      if (
+        this._vertexAttribs[0]._isPointer || (
+          this._extensions.webgl_draw_buffers &&
+          this._extensions.webgl_draw_buffers._buffersState &&
+          this._extensions.webgl_draw_buffers._buffersState.length > 0
+        )
+      ) {
+        return super.drawArrays(mode, first, reducedCount)
+      } else {
+        this._beginAttrib0Hack()
+        super._drawArraysInstanced(mode, first, reducedCount, 1)
+        this._endAttrib0Hack()
+      }
+    }
+  }
+
+  drawElements (mode, count, type, ioffset) {
+    mode |= 0
+    count |= 0
+    type |= 0
+    ioffset |= 0
+
+    if (count < 0 || ioffset < 0) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    if (!this._checkStencilState()) {
+      return
+    }
+
+    const elementBuffer = this._activeElementArrayBuffer
+    if (!elementBuffer) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    // Unpack element data
+    let elementData = null
+    let offset = ioffset
+    if (type === gl.UNSIGNED_SHORT) {
+      if (offset % 2) {
+        this.setError(gl.INVALID_OPERATION)
+        return
+      }
+      offset >>= 1
+      elementData = new Uint16Array(elementBuffer._elements.buffer)
+    } else if (this._extensions.oes_element_index_uint && type === gl.UNSIGNED_INT) {
+      if (offset % 4) {
+        this.setError(gl.INVALID_OPERATION)
+        return
+      }
+      offset >>= 2
+      elementData = new Uint32Array(elementBuffer._elements.buffer)
+    } else if (type === gl.UNSIGNED_BYTE) {
+      elementData = elementBuffer._elements
+    } else {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    let reducedCount = count
+    switch (mode) {
+      case gl.TRIANGLES:
+        if (count % 3) {
+          reducedCount -= (count % 3)
+        }
+        break
+      case gl.LINES:
+        if (count % 2) {
+          reducedCount -= (count % 2)
+        }
+        break
+      case gl.POINTS:
+        break
+      case gl.LINE_LOOP:
+      case gl.LINE_STRIP:
+        if (count < 2) {
+          this.setError(gl.INVALID_OPERATION)
+          return
+        }
+        break
+      case gl.TRIANGLE_FAN:
+      case gl.TRIANGLE_STRIP:
+        if (count < 3) {
+          this.setError(gl.INVALID_OPERATION)
+          return
+        }
+        break
+      default:
+        this.setError(gl.INVALID_ENUM)
+        return
+    }
+
+    if (!this._framebufferOk()) {
+      return
+    }
+
+    if (count === 0) {
+      this._checkVertexAttribState(0)
+      return
+    }
+
+    if ((count + offset) >>> 0 > elementData.length) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    // Compute max index
+    let maxIndex = -1
+    for (let i = offset; i < offset + count; ++i) {
+      maxIndex = Math.max(maxIndex, elementData[i])
+    }
+
+    if (maxIndex < 0) {
+      this._checkVertexAttribState(0)
+      return
+    }
+
+    if (this._checkVertexAttribState(maxIndex)) {
+      if (reducedCount > 0) {
+        if (this._vertexAttribs[0]._isPointer) {
+          return super.drawElements(mode, reducedCount, type, ioffset)
+        } else {
+          this._beginAttrib0Hack()
+          super._drawElementsInstanced(mode, reducedCount, type, ioffset, 1)
+          this._endAttrib0Hack()
+        }
+      }
+    }
+  }
+
+  enable (cap) {
+    cap |= 0
+    super.enable(cap)
+  }
+
+  enableVertexAttribArray (index) {
+    index |= 0
+    if (index < 0 || index >= this._vertexAttribs.length) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    super.enableVertexAttribArray(index)
+
+    this._vertexAttribs[index]._isPointer = true
+  }
+
+  finish () {
+    return super.finish()
+  }
+
+  flush () {
+    return super.flush()
+  }
+
+  framebufferRenderbuffer (
+    target,
+    attachment,
+    renderbufferTarget,
+    renderbuffer) {
+    target = target | 0
+    attachment = attachment | 0
+    renderbufferTarget = renderbufferTarget | 0
+
+    if (!checkObject(renderbuffer)) {
+      throw new TypeError('framebufferRenderbuffer(GLenum, GLenum, GLenum, WebGLRenderbuffer)')
+    }
+
+    if (target !== gl.FRAMEBUFFER ||
+      !this._validFramebufferAttachment(attachment) ||
+      renderbufferTarget !== gl.RENDERBUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    const framebuffer = this._activeFramebuffer
+    if (!framebuffer) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (renderbuffer && !this._checkWrapper(renderbuffer, WebGLRenderbuffer)) {
+      return
+    }
+
+    framebuffer._setAttachment(renderbuffer, attachment)
+    this._updateFramebufferAttachments(framebuffer)
+  }
+
+  framebufferTexture2D (
+    target,
+    attachment,
+    textarget,
+    texture,
+    level) {
+    target |= 0
+    attachment |= 0
+    textarget |= 0
+    level |= 0
+    if (!checkObject(texture)) {
+      throw new TypeError('framebufferTexture2D(GLenum, GLenum, GLenum, WebGLTexture, GLint)')
+    }
+
+    // Check parameters are ok
+    if (target !== gl.FRAMEBUFFER ||
+      !this._validFramebufferAttachment(attachment)) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (level !== 0) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    // Check object ownership
+    if (texture && !this._checkWrapper(texture, WebGLTexture)) {
+      return
+    }
+
+    // Check texture target is ok
+    if (textarget === gl.TEXTURE_2D) {
+      if (texture && texture._binding !== gl.TEXTURE_2D) {
+        this.setError(gl.INVALID_OPERATION)
+        return
+      }
+    } else if (this._validCubeTarget(textarget)) {
+      if (texture && texture._binding !== gl.TEXTURE_CUBE_MAP) {
+        this.setError(gl.INVALID_OPERATION)
+        return
+      }
+    } else {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    // Check a framebuffer is actually bound
+    const framebuffer = this._activeFramebuffer
+    if (!framebuffer) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    framebuffer._attachmentLevel[attachment] = level
+    framebuffer._attachmentFace[attachment] = textarget
+    framebuffer._setAttachment(texture, attachment)
+    this._updateFramebufferAttachments(framebuffer)
+  }
+
+  frontFace (mode) {
+    return super.frontFace(mode | 0)
+  }
+
+  generateMipmap (target) {
+    return super.generateMipmap(target | 0) | 0
+  }
+
+  getActiveAttrib (program, index) {
+    if (!checkObject(program)) {
+      throw new TypeError('getActiveAttrib(WebGLProgram)')
+    } else if (!program) {
+      this.setError(gl.INVALID_VALUE)
+    } else if (this._checkWrapper(program, WebGLProgram)) {
+      const info = super.getActiveAttrib(program._ | 0, index | 0)
+      if (info) {
+        return new WebGLActiveInfo(info)
+      }
+    }
+    return null
+  }
+
+  getActiveUniform (program, index) {
+    if (!checkObject(program)) {
+      throw new TypeError('getActiveUniform(WebGLProgram, GLint)')
+    } else if (!program) {
+      this.setError(gl.INVALID_VALUE)
+    } else if (this._checkWrapper(program, WebGLProgram)) {
+      const info = super.getActiveUniform(program._ | 0, index | 0)
+      if (info) {
+        return new WebGLActiveInfo(info)
+      }
+    }
+    return null
+  }
+
+  getAttachedShaders (program) {
+    if (!checkObject(program) ||
+      (typeof program === 'object' &&
+        program !== null &&
+        !(program instanceof WebGLProgram))) {
+      throw new TypeError('getAttachedShaders(WebGLProgram)')
+    }
+    if (!program) {
+      this.setError(gl.INVALID_VALUE)
+    } else if (this._checkWrapper(program, WebGLProgram)) {
+      const shaderArray = super.getAttachedShaders(program._ | 0)
+      if (!shaderArray) {
+        return null
+      }
+      const unboxedShaders = new Array(shaderArray.length)
+      for (let i = 0; i < shaderArray.length; ++i) {
+        unboxedShaders[i] = this._shaders[shaderArray[i]]
+      }
+      return unboxedShaders
+    }
+    return null
+  }
+
+  getAttribLocation (program, name) {
+    if (!checkObject(program)) {
+      throw new TypeError('getAttribLocation(WebGLProgram, String)')
+    }
+    name += ''
+    if (!isValidString(name) || name.length > MAX_ATTRIBUTE_LENGTH) {
+      this.setError(gl.INVALID_VALUE)
+    } else if (this._checkWrapper(program, WebGLProgram)) {
+      return super.getAttribLocation(program._ | 0, name + '')
+    }
+    return -1
+  }
+
+  getParameter (pname) {
+    pname |= 0
+    switch (pname) {
+      case gl.ARRAY_BUFFER_BINDING:
+        return this._activeArrayBuffer
+      case gl.ELEMENT_ARRAY_BUFFER_BINDING:
+        return this._activeElementArrayBuffer
+      case gl.CURRENT_PROGRAM:
+        return this._activeProgram
+      case gl.FRAMEBUFFER_BINDING:
+        return this._activeFramebuffer
+      case gl.RENDERBUFFER_BINDING:
+        return this._activeRenderbuffer
+      case gl.TEXTURE_BINDING_2D:
+        return this._getActiveTextureUnit()._bind2D
+      case gl.TEXTURE_BINDING_CUBE_MAP:
+        return this._getActiveTextureUnit()._bindCube
+      case gl.VERSION:
+        return 'WebGL 1.0 stack-gl ' + HEADLESS_VERSION
+      case gl.VENDOR:
+        return 'stack-gl'
+      case gl.RENDERER:
+        return 'ANGLE'
+      case gl.SHADING_LANGUAGE_VERSION:
+        return 'WebGL GLSL ES 1.0 stack-gl'
+
+      case gl.COMPRESSED_TEXTURE_FORMATS:
+        return new Uint32Array(0)
+
+      // Int arrays
+      case gl.MAX_VIEWPORT_DIMS:
+      case gl.SCISSOR_BOX:
+      case gl.VIEWPORT:
+        return new Int32Array(super.getParameter(pname))
+
+      // Float arrays
+      case gl.ALIASED_LINE_WIDTH_RANGE:
+      case gl.ALIASED_POINT_SIZE_RANGE:
+      case gl.DEPTH_RANGE:
+      case gl.BLEND_COLOR:
+      case gl.COLOR_CLEAR_VALUE:
+        return new Float32Array(super.getParameter(pname))
+
+      case gl.COLOR_WRITEMASK:
+        return super.getParameter(pname)
+
+      case gl.DEPTH_CLEAR_VALUE:
+      case gl.LINE_WIDTH:
+      case gl.POLYGON_OFFSET_FACTOR:
+      case gl.POLYGON_OFFSET_UNITS:
+      case gl.SAMPLE_COVERAGE_VALUE:
+        return +super.getParameter(pname)
+
+      case gl.BLEND:
+      case gl.CULL_FACE:
+      case gl.DEPTH_TEST:
+      case gl.DEPTH_WRITEMASK:
+      case gl.DITHER:
+      case gl.POLYGON_OFFSET_FILL:
+      case gl.SAMPLE_COVERAGE_INVERT:
+      case gl.SCISSOR_TEST:
+      case gl.STENCIL_TEST:
+      case gl.UNPACK_FLIP_Y_WEBGL:
+      case gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL:
+        return !!super.getParameter(pname)
+
+      case gl.ACTIVE_TEXTURE:
+      case gl.ALPHA_BITS:
+      case gl.BLEND_DST_ALPHA:
+      case gl.BLEND_DST_RGB:
+      case gl.BLEND_EQUATION_ALPHA:
+      case gl.BLEND_EQUATION_RGB:
+      case gl.BLEND_SRC_ALPHA:
+      case gl.BLEND_SRC_RGB:
+      case gl.BLUE_BITS:
+      case gl.CULL_FACE_MODE:
+      case gl.DEPTH_BITS:
+      case gl.DEPTH_FUNC:
+      case gl.FRONT_FACE:
+      case gl.GENERATE_MIPMAP_HINT:
+      case gl.GREEN_BITS:
+      case gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS:
+      case gl.MAX_CUBE_MAP_TEXTURE_SIZE:
+      case gl.MAX_FRAGMENT_UNIFORM_VECTORS:
+      case gl.MAX_RENDERBUFFER_SIZE:
+      case gl.MAX_TEXTURE_IMAGE_UNITS:
+      case gl.MAX_TEXTURE_SIZE:
+      case gl.MAX_VARYING_VECTORS:
+      case gl.MAX_VERTEX_ATTRIBS:
+      case gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS:
+      case gl.MAX_VERTEX_UNIFORM_VECTORS:
+      case gl.PACK_ALIGNMENT:
+      case gl.RED_BITS:
+      case gl.SAMPLE_BUFFERS:
+      case gl.SAMPLES:
+      case gl.STENCIL_BACK_FAIL:
+      case gl.STENCIL_BACK_FUNC:
+      case gl.STENCIL_BACK_PASS_DEPTH_FAIL:
+      case gl.STENCIL_BACK_PASS_DEPTH_PASS:
+      case gl.STENCIL_BACK_REF:
+      case gl.STENCIL_BACK_VALUE_MASK:
+      case gl.STENCIL_BACK_WRITEMASK:
+      case gl.STENCIL_BITS:
+      case gl.STENCIL_CLEAR_VALUE:
+      case gl.STENCIL_FAIL:
+      case gl.STENCIL_FUNC:
+      case gl.STENCIL_PASS_DEPTH_FAIL:
+      case gl.STENCIL_PASS_DEPTH_PASS:
+      case gl.STENCIL_REF:
+      case gl.STENCIL_VALUE_MASK:
+      case gl.STENCIL_WRITEMASK:
+      case gl.SUBPIXEL_BITS:
+      case gl.UNPACK_ALIGNMENT:
+      case gl.UNPACK_COLORSPACE_CONVERSION_WEBGL:
+        return super.getParameter(pname) | 0
+
+      case gl.IMPLEMENTATION_COLOR_READ_FORMAT:
+      case gl.IMPLEMENTATION_COLOR_READ_TYPE:
+        return super.getParameter(pname)
+
+      default:
+        if (this._extensions.webgl_draw_buffers) {
+          const ext = this._extensions.webgl_draw_buffers
+          switch (pname) {
+            case ext.DRAW_BUFFER0_WEBGL:
+            case ext.DRAW_BUFFER1_WEBGL:
+            case ext.DRAW_BUFFER2_WEBGL:
+            case ext.DRAW_BUFFER3_WEBGL:
+            case ext.DRAW_BUFFER4_WEBGL:
+            case ext.DRAW_BUFFER5_WEBGL:
+            case ext.DRAW_BUFFER6_WEBGL:
+            case ext.DRAW_BUFFER7_WEBGL:
+            case ext.DRAW_BUFFER8_WEBGL:
+            case ext.DRAW_BUFFER9_WEBGL:
+            case ext.DRAW_BUFFER10_WEBGL:
+            case ext.DRAW_BUFFER11_WEBGL:
+            case ext.DRAW_BUFFER12_WEBGL:
+            case ext.DRAW_BUFFER13_WEBGL:
+            case ext.DRAW_BUFFER14_WEBGL:
+            case ext.DRAW_BUFFER15_WEBGL:
+              if (ext._buffersState.length === 1 && ext._buffersState[0] === gl.BACK) {
+                return gl.BACK
+              }
+              return super.getParameter(pname)
+            case ext.MAX_DRAW_BUFFERS_WEBGL:
+            case ext.MAX_COLOR_ATTACHMENTS_WEBGL:
+              return super.getParameter(pname)
+          }
+        }
+        this.setError(gl.INVALID_ENUM)
+        return null
+    }
+  }
+
+  getShaderPrecisionFormat (
+    shaderType,
+    precisionType) {
+    shaderType |= 0
+    precisionType |= 0
+
+    if (!(shaderType === gl.FRAGMENT_SHADER ||
+      shaderType === gl.VERTEX_SHADER) ||
+      !(precisionType === gl.LOW_FLOAT ||
+        precisionType === gl.MEDIUM_FLOAT ||
+        precisionType === gl.HIGH_FLOAT ||
+        precisionType === gl.LOW_INT ||
+        precisionType === gl.MEDIUM_INT ||
+        precisionType === gl.HIGH_INT)) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    const format = super.getShaderPrecisionFormat(shaderType, precisionType)
+    if (!format) {
+      return null
+    }
+
+    return new WebGLShaderPrecisionFormat(format)
+  }
+
+  getBufferParameter (target, pname) {
+    target |= 0
+    pname |= 0
+    if (target !== gl.ARRAY_BUFFER &&
+      target !== gl.ELEMENT_ARRAY_BUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return null
+    }
+
+    switch (pname) {
+      case gl.BUFFER_SIZE:
+      case gl.BUFFER_USAGE:
+        return super.getBufferParameter(target | 0, pname | 0)
+      default:
+        this.setError(gl.INVALID_ENUM)
+        return null
+    }
+  }
+
+  getError () {
+    return super.getError()
+  }
+
+  getFramebufferAttachmentParameter (target, attachment, pname) {
+    target |= 0
+    attachment |= 0
+    pname |= 0
+
+    if (target !== gl.FRAMEBUFFER ||
+      !this._validFramebufferAttachment(attachment)) {
+      this.setError(gl.INVALID_ENUM)
+      return null
+    }
+
+    const framebuffer = this._activeFramebuffer
+    if (!framebuffer) {
+      this.setError(gl.INVALID_OPERATION)
+      return null
+    }
+
+    const object = framebuffer._attachments[attachment]
+    if (object === null) {
+      if (pname === gl.FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE) {
+        return gl.NONE
+      }
+    } else if (object instanceof WebGLTexture) {
+      switch (pname) {
+        case gl.FRAMEBUFFER_ATTACHMENT_OBJECT_NAME:
+          return object
+        case gl.FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE:
+          return gl.TEXTURE
+        case gl.FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL:
+          return framebuffer._attachmentLevel[attachment]
+        case gl.FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE:
+          const face = framebuffer._attachmentFace[attachment]
+          if (face === gl.TEXTURE_2D) {
+            return 0
+          }
+          return face
+      }
+    } else if (object instanceof WebGLRenderbuffer) {
+      switch (pname) {
+        case gl.FRAMEBUFFER_ATTACHMENT_OBJECT_NAME:
+          return object
+        case gl.FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE:
+          return gl.RENDERBUFFER
+      }
+    }
+
+    this.setError(gl.INVALID_ENUM)
+    return null
+  }
+
+  getProgramParameter (program, pname) {
+    pname |= 0
+    if (!checkObject(program)) {
+      throw new TypeError('getProgramParameter(WebGLProgram, GLenum)')
+    } else if (this._checkWrapper(program, WebGLProgram)) {
+      switch (pname) {
+        case gl.DELETE_STATUS:
+          return program._pendingDelete
+
+        case gl.LINK_STATUS:
+          return program._linkStatus
+
+        case gl.VALIDATE_STATUS:
+          return !!super.getProgramParameter(program._, pname)
+
+        case gl.ATTACHED_SHADERS:
+        case gl.ACTIVE_ATTRIBUTES:
+        case gl.ACTIVE_UNIFORMS:
+          return super.getProgramParameter(program._, pname)
+      }
+      this.setError(gl.INVALID_ENUM)
+    }
+    return null
+  }
+
+  getProgramInfoLog (program) {
+    if (!checkObject(program)) {
+      throw new TypeError('getProgramInfoLog(WebGLProgram)')
+    } else if (this._checkWrapper(program, WebGLProgram)) {
+      return program._linkInfoLog
+    }
+    return null
+  }
+
+  getRenderbufferParameter (target, pname) {
+    target |= 0
+    pname |= 0
+    if (target !== gl.RENDERBUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return null
+    }
+    const renderbuffer = this._activeRenderbuffer
+    if (!renderbuffer) {
+      this.setError(gl.INVALID_OPERATION)
+      return null
+    }
+    switch (pname) {
+      case gl.RENDERBUFFER_INTERNAL_FORMAT:
+        return renderbuffer._format
+      case gl.RENDERBUFFER_WIDTH:
+        return renderbuffer._width
+      case gl.RENDERBUFFER_HEIGHT:
+        return renderbuffer._height
+      case gl.RENDERBUFFER_SIZE:
+      case gl.RENDERBUFFER_RED_SIZE:
+      case gl.RENDERBUFFER_GREEN_SIZE:
+      case gl.RENDERBUFFER_BLUE_SIZE:
+      case gl.RENDERBUFFER_ALPHA_SIZE:
+      case gl.RENDERBUFFER_DEPTH_SIZE:
+      case gl.RENDERBUFFER_STENCIL_SIZE:
+        return super.getRenderbufferParameter(target, pname)
+    }
+    this.setError(gl.INVALID_ENUM)
+    return null
+  }
+
+  getShaderParameter (shader, pname) {
+    pname |= 0
+    if (!checkObject(shader)) {
+      throw new TypeError('getShaderParameter(WebGLShader, GLenum)')
+    } else if (this._checkWrapper(shader, WebGLShader)) {
+      switch (pname) {
+        case gl.DELETE_STATUS:
+          return shader._pendingDelete
+        case gl.COMPILE_STATUS:
+          return shader._compileStatus
+        case gl.SHADER_TYPE:
+          return shader._type
+      }
+      this.setError(gl.INVALID_ENUM)
+    }
+    return null
+  }
+
+  getShaderInfoLog (shader) {
+    if (!checkObject(shader)) {
+      throw new TypeError('getShaderInfoLog(WebGLShader)')
+    } else if (this._checkWrapper(shader, WebGLShader)) {
+      return shader._compileInfo
+    }
+    return null
+  }
+
+  getShaderSource (shader) {
+    if (!checkObject(shader)) {
+      throw new TypeError('Input to getShaderSource must be an object')
+    } else if (this._checkWrapper(shader, WebGLShader)) {
+      return shader._source
+    }
+    return null
+  }
+
+  getTexParameter (target, pname) {
+    target |= 0
+    pname |= 0
+
+    if (!this._checkTextureTarget(target)) {
+      return null
+    }
+
+    const unit = this._getActiveTextureUnit()
+    if ((target === gl.TEXTURE_2D && !unit._bind2D) ||
+      (target === gl.TEXTURE_CUBE_MAP && !unit._bindCube)) {
+      this.setError(gl.INVALID_OPERATION)
+      return null
+    }
+
+    switch (pname) {
+      case gl.TEXTURE_MAG_FILTER:
+      case gl.TEXTURE_MIN_FILTER:
+      case gl.TEXTURE_WRAP_S:
+      case gl.TEXTURE_WRAP_T:
+        return super.getTexParameter(target, pname)
+    }
+
+    this.setError(gl.INVALID_ENUM)
+    return null
+  }
+
+  getUniform (program, location) {
+    if (!checkObject(program) ||
+      !checkObject(location)) {
+      throw new TypeError('getUniform(WebGLProgram, WebGLUniformLocation)')
+    } else if (!program) {
+      this.setError(gl.INVALID_VALUE)
+      return null
+    } else if (!location) {
+      return null
+    } else if (this._checkWrapper(program, WebGLProgram)) {
+      if (!checkUniform(program, location)) {
+        this.setError(gl.INVALID_OPERATION)
+        return null
+      }
+      const data = super.getUniform(program._ | 0, location._ | 0)
+      if (!data) {
+        return null
+      }
+      switch (location._activeInfo.type) {
+        case gl.FLOAT:
+          return data[0]
+        case gl.FLOAT_VEC2:
+          return new Float32Array(data.slice(0, 2))
+        case gl.FLOAT_VEC3:
+          return new Float32Array(data.slice(0, 3))
+        case gl.FLOAT_VEC4:
+          return new Float32Array(data.slice(0, 4))
+        case gl.INT:
+          return data[0] | 0
+        case gl.INT_VEC2:
+          return new Int32Array(data.slice(0, 2))
+        case gl.INT_VEC3:
+          return new Int32Array(data.slice(0, 3))
+        case gl.INT_VEC4:
+          return new Int32Array(data.slice(0, 4))
+        case gl.BOOL:
+          return !!data[0]
+        case gl.BOOL_VEC2:
+          return [!!data[0], !!data[1]]
+        case gl.BOOL_VEC3:
+          return [!!data[0], !!data[1], !!data[2]]
+        case gl.BOOL_VEC4:
+          return [!!data[0], !!data[1], !!data[2], !!data[3]]
+        case gl.FLOAT_MAT2:
+          return new Float32Array(data.slice(0, 4))
+        case gl.FLOAT_MAT3:
+          return new Float32Array(data.slice(0, 9))
+        case gl.FLOAT_MAT4:
+          return new Float32Array(data.slice(0, 16))
+        case gl.SAMPLER_2D:
+        case gl.SAMPLER_CUBE:
+          return data[0] | 0
+        default:
+          return null
+      }
+    }
+    return null
+  }
+
+  getUniformLocation (program, name) {
+    if (!checkObject(program)) {
+      throw new TypeError('getUniformLocation(WebGLProgram, String)')
+    }
+
+    name += ''
+    if (!isValidString(name)) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    if (this._checkWrapper(program, WebGLProgram)) {
+      const loc = super.getUniformLocation(program._ | 0, name)
+      if (loc >= 0) {
+        let searchName = name
+        if (/\[\d+\]$/.test(name)) {
+          searchName = name.replace(/\[\d+\]$/, '[0]')
+        }
+
+        let info = null
+        for (let i = 0; i < program._uniforms.length; ++i) {
+          const infoItem = program._uniforms[i]
+          if (infoItem.name === searchName) {
+            info = {
+              size: infoItem.size,
+              type: infoItem.type,
+              name: infoItem.name
+            }
+          }
+        }
+        if (!info) {
+          return null
+        }
+
+        const result = new WebGLUniformLocation(
+          loc,
+          program,
+          info)
+
+        // handle array case
+        if (/\[0\]$/.test(name)) {
+          const baseName = name.replace(/\[0\]$/, '')
+          const arrayLocs = []
+
+          // if (offset < 0 || offset >= info.size) {
+          //   return null
+          // }
+
+          this._saveError()
+          for (let i = 0; this.getError() === gl.NO_ERROR; ++i) {
+            const xloc = super.getUniformLocation(
+              program._ | 0,
+              baseName + '[' + i + ']')
+            if (this.getError() !== gl.NO_ERROR || xloc < 0) {
+              break
+            }
+            arrayLocs.push(xloc)
+          }
+          this._restoreError(gl.NO_ERROR)
+
+          result._array = arrayLocs
+        } else if (/\[(\d+)\]$/.test(name)) {
+          const offset = +(/\[(\d+)\]$/.exec(name))[1]
+          if (offset < 0 || offset >= info.size) {
+            return null
+          }
+        }
+        return result
+      }
+    }
+    return null
+  }
+
+  getVertexAttrib (index, pname) {
+    index |= 0
+    pname |= 0
+    if (index < 0 || index >= this._vertexAttribs.length) {
+      this.setError(gl.INVALID_VALUE)
+      return null
+    }
+    const attrib = this._vertexAttribs[index]
+
+    const extInstancing = this._extensions.angle_instanced_arrays
+    if (extInstancing) {
+      if (pname === extInstancing.VERTEX_ATTRIB_ARRAY_DIVISOR_ANGLE) {
+        return attrib._divisor
+      }
+    }
+
+    switch (pname) {
+      case gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING:
+        return attrib._pointerBuffer
+      case gl.VERTEX_ATTRIB_ARRAY_ENABLED:
+        return attrib._isPointer
+      case gl.VERTEX_ATTRIB_ARRAY_SIZE:
+        return attrib._inputSize
+      case gl.VERTEX_ATTRIB_ARRAY_STRIDE:
+        return attrib._inputStride
+      case gl.VERTEX_ATTRIB_ARRAY_TYPE:
+        return attrib._pointerType
+      case gl.VERTEX_ATTRIB_ARRAY_NORMALIZED:
+        return attrib._pointerNormal
+      case gl.CURRENT_VERTEX_ATTRIB:
+        return new Float32Array(attrib._data)
+      default:
+        this.setError(gl.INVALID_ENUM)
+        return null
+    }
+  }
+
+  getVertexAttribOffset (index, pname) {
+    index |= 0
+    pname |= 0
+    if (index < 0 || index >= this._vertexAttribs.length) {
+      this.setError(gl.INVALID_VALUE)
+      return null
+    }
+    if (pname === gl.VERTEX_ATTRIB_ARRAY_POINTER) {
+      return this._vertexAttribs[index]._pointerOffset
+    } else {
+      this.setError(gl.INVALID_ENUM)
+      return null
+    }
+  }
+
+  hint (target, mode) {
+    target |= 0
+    mode |= 0
+
+    if (target !== gl.GENERATE_MIPMAP_HINT) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (mode !== gl.FASTEST &&
+      mode !== gl.NICEST &&
+      mode !== gl.DONT_CARE) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    return super.hint(target, mode)
+  }
+
+  isBuffer (object) {
+    if (!this._isObject(object, 'isBuffer', WebGLBuffer)) return false
+    return super.isBuffer(object._ | 0)
+  }
+
+  isFramebuffer (object) {
+    if (!this._isObject(object, 'isFramebuffer', WebGLFramebuffer)) return false
+    return super.isFramebuffer(object._ | 0)
+  }
+
+  isProgram (object) {
+    if (!this._isObject(object, 'isProgram', WebGLProgram)) return false
+    return super.isProgram(object._ | 0)
+  }
+
+  isRenderbuffer (object) {
+    if (!this._isObject(object, 'isRenderbuffer', WebGLRenderbuffer)) return false
+    return super.isRenderbuffer(object._ | 0)
+  }
+
+  isShader (object) {
+    if (!this._isObject(object, 'isShader', WebGLShader)) return false
+    return super.isShader(object._ | 0)
+  }
+
+  isTexture (object) {
+    if (!this._isObject(object, 'isTexture', WebGLTexture)) return false
+    return super.isTexture(object._ | 0)
+  }
+
+  isEnabled (cap) {
+    return super.isEnabled(cap | 0)
+  }
+
+  lineWidth (width) {
+    if (isNaN(width)) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+    return super.lineWidth(+width)
+  }
+
+  linkProgram (program) {
+    if (!checkObject(program)) {
+      throw new TypeError('linkProgram(WebGLProgram)')
+    }
+    if (this._checkWrapper(program, WebGLProgram)) {
+      program._linkCount += 1
+      program._attributes = []
+      const prevError = this.getError()
+      super.linkProgram(program._ | 0)
+      const error = this.getError()
+      if (error === gl.NO_ERROR) {
+        program._linkStatus = this._fixupLink(program)
+      }
+      this.getError()
+      this.setError(prevError || error)
+    }
+  }
+
+  pixelStorei (pname, param) {
+    pname |= 0
+    param |= 0
+    if (pname === gl.UNPACK_ALIGNMENT) {
+      if (param === 1 ||
+        param === 2 ||
+        param === 4 ||
+        param === 8) {
+        this._unpackAlignment = param
+      } else {
+        this.setError(gl.INVALID_VALUE)
+        return
+      }
+    } else if (pname === gl.PACK_ALIGNMENT) {
+      if (param === 1 ||
+        param === 2 ||
+        param === 4 ||
+        param === 8) {
+        this._packAlignment = param
+      } else {
+        this.setError(gl.INVALID_VALUE)
+        return
+      }
+    } else if (pname === gl.UNPACK_COLORSPACE_CONVERSION_WEBGL) {
+      if (!(param === gl.NONE || param === gl.BROWSER_DEFAULT_WEBGL)) {
+        this.setError(gl.INVALID_VALUE)
+        return
+      }
+    }
+    return super.pixelStorei(pname, param)
+  }
+
+  polygonOffset (factor, units) {
+    return super.polygonOffset(+factor, +units)
+  }
+
+  readPixels (x, y, width, height, format, type, pixels) {
+    x |= 0
+    y |= 0
+    width |= 0
+    height |= 0
+
+    if (this._extensions.oes_texture_float && type === gl.FLOAT && format === gl.RGBA) {
+    } else if (format === gl.RGB ||
+      format === gl.ALPHA ||
+      type !== gl.UNSIGNED_BYTE) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    } else if (format !== gl.RGBA) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    } else if (
+      width < 0 ||
+      height < 0 ||
+      !(pixels instanceof Uint8Array)) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    if (!this._framebufferOk()) {
+      return
+    }
+
+    let rowStride = width * 4
+    if (rowStride % this._packAlignment !== 0) {
+      rowStride += this._packAlignment - (rowStride % this._packAlignment)
+    }
+
+    const imageSize = rowStride * (height - 1) + width * 4
+    if (imageSize <= 0) {
+      return
+    }
+    if (pixels.length < imageSize) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    // Handle reading outside the window
+    let viewWidth = this.drawingBufferWidth
+    let viewHeight = this.drawingBufferHeight
+
+    if (this._activeFramebuffer) {
+      viewWidth = this._activeFramebuffer._width
+      viewHeight = this._activeFramebuffer._height
+    }
+
+    const pixelData = unpackTypedArray(pixels)
+
+    if (x >= viewWidth || x + width <= 0 ||
+      y >= viewHeight || y + height <= 0) {
+      for (let i = 0; i < pixelData.length; ++i) {
+        pixelData[i] = 0
+      }
+    } else if (x < 0 || x + width > viewWidth ||
+      y < 0 || y + height > viewHeight) {
+      for (let i = 0; i < pixelData.length; ++i) {
+        pixelData[i] = 0
+      }
+
+      let nx = x
+      let nWidth = width
+      if (x < 0) {
+        nWidth += x
+        nx = 0
+      }
+      if (nx + width > viewWidth) {
+        nWidth = viewWidth - nx
+      }
+      let ny = y
+      let nHeight = height
+      if (y < 0) {
+        nHeight += y
+        ny = 0
+      }
+      if (ny + height > viewHeight) {
+        nHeight = viewHeight - ny
+      }
+
+      let nRowStride = nWidth * 4
+      if (nRowStride % this._packAlignment !== 0) {
+        nRowStride += this._packAlignment - (nRowStride % this._packAlignment)
+      }
+
+      if (nWidth > 0 && nHeight > 0) {
+        const subPixels = new Uint8Array(nRowStride * nHeight)
+        super.readPixels(
+          nx,
+          ny,
+          nWidth,
+          nHeight,
+          format,
+          type,
+          subPixels)
+
+        const offset = 4 * (nx - x) + (ny - y) * rowStride
+        for (let j = 0; j < nHeight; ++j) {
+          for (let i = 0; i < nWidth; ++i) {
+            for (let k = 0; k < 4; ++k) {
+              pixelData[offset + j * rowStride + 4 * i + k] =
+                subPixels[j * nRowStride + 4 * i + k]
+            }
+          }
+        }
+      }
+    } else {
+      super.readPixels(
+        x,
+        y,
+        width,
+        height,
+        format,
+        type,
+        pixelData)
+    }
+  }
+
+  renderbufferStorage (
+    target,
+    internalFormat,
+    width,
+    height) {
+    target |= 0
+    internalFormat |= 0
+    width |= 0
+    height |= 0
+
+    if (target !== gl.RENDERBUFFER) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    const renderbuffer = this._activeRenderbuffer
+    if (!renderbuffer) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (internalFormat !== gl.RGBA4 &&
+      internalFormat !== gl.RGB565 &&
+      internalFormat !== gl.RGB5_A1 &&
+      internalFormat !== gl.DEPTH_COMPONENT16 &&
+      internalFormat !== gl.STENCIL_INDEX &&
+      internalFormat !== gl.STENCIL_INDEX8 &&
+      internalFormat !== gl.DEPTH_STENCIL) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    this._saveError()
+    super.renderbufferStorage(
+      target,
+      internalFormat,
+      width,
+      height)
+    const error = this.getError()
+    this._restoreError(error)
+    if (error !== gl.NO_ERROR) {
+      return
+    }
+
+    renderbuffer._width = width
+    renderbuffer._height = height
+    renderbuffer._format = internalFormat
+
+    const activeFramebuffer = this._activeFramebuffer
+    if (activeFramebuffer) {
+      let needsUpdate = false
+      const attachments = this._getAttachments()
+      for (let i = 0; i < attachments.length; ++i) {
+        if (activeFramebuffer._attachments[attachments[i]] === renderbuffer) {
+          needsUpdate = true
+          break
+        }
+      }
+      if (needsUpdate) {
+        this._updateFramebufferAttachments(this._activeFramebuffer)
+      }
+    }
+  }
+
+  resize (width, height) {
+    width = width | 0
+    height = height | 0
+    if (!(width > 0 && height > 0)) {
+      throw new Error('Invalid surface dimensions')
+    } else if (width !== this.drawingBufferWidth ||
+      height !== this.drawingBufferHeight) {
+      this._resizeDrawingBuffer(width, height)
+      this.drawingBufferWidth = width
+      this.drawingBufferHeight = height
+    }
+  }
+
+  sampleCoverage (value, invert) {
+    return super.sampleCoverage(+value, !!invert)
+  }
+
+  scissor (x, y, width, height) {
+    return super.scissor(x | 0, y | 0, width | 0, height | 0)
+  }
+
+  shaderSource (shader, source) {
+    if (!checkObject(shader)) {
+      throw new TypeError('shaderSource(WebGLShader, String)')
+    }
+    if (!shader || (!source && typeof source !== 'string')) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+    source += ''
+    if (!isValidString(source)) {
+      this.setError(gl.INVALID_VALUE)
+    } else if (this._checkWrapper(shader, WebGLShader)) {
+      super.shaderSource(shader._ | 0, this._wrapShader(shader._type, source)) // eslint-disable-line
+      shader._source = source
+    }
+  }
+
+  stencilFunc (func, ref, mask) {
+    return super.stencilFunc(func | 0, ref | 0, mask | 0)
+  }
+
+  stencilFuncSeparate (face, func, ref, mask) {
+    return super.stencilFuncSeparate(face | 0, func | 0, ref | 0, mask | 0)
+  }
+
+  stencilMask (mask) {
+    return super.stencilMask(mask | 0)
+  }
+
+  stencilMaskSeparate (face, mask) {
+    return super.stencilMaskSeparate(face | 0, mask | 0)
+  }
+
+  stencilOp (fail, zfail, zpass) {
+    return super.stencilOp(fail | 0, zfail | 0, zpass | 0)
+  }
+
+  stencilOpSeparate (face, fail, zfail, zpass) {
+    return super.stencilOpSeparate(face | 0, fail | 0, zfail | 0, zpass | 0)
+  }
+
+  texImage2D (
+    target,
+    level,
+    internalFormat,
+    width,
+    height,
+    border,
+    format,
+    type,
+    pixels) {
+    if (arguments.length === 6) {
+      pixels = border
+      type = height
+      format = width
+
+      pixels = extractImageData(pixels)
+
+      if (pixels == null) {
+        throw new TypeError('texImage2D(GLenum, GLint, GLenum, GLint, GLenum, GLenum, ImageData | HTMLImageElement | HTMLCanvasElement | HTMLVideoElement)')
+      }
+
+      width = pixels.width
+      height = pixels.height
+      pixels = pixels.data
+    }
+
+    target |= 0
+    level |= 0
+    internalFormat |= 0
+    width |= 0
+    height |= 0
+    border |= 0
+    format |= 0
+    type |= 0
+
+    if (typeof pixels !== 'object' && pixels !== void 0) {
+      throw new TypeError('texImage2D(GLenum, GLint, GLenum, GLint, GLint, GLint, GLenum, GLenum, Uint8Array)')
+    }
+
+    if (!checkFormat(format) || !checkFormat(internalFormat)) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (type === gl.FLOAT && !this._extensions.oes_texture_float) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    const texture = this._getTexImage(target)
+    if (!texture || format !== internalFormat) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    const pixelSize = this._computePixelSize(type, format)
+    if (pixelSize === 0) {
+      return
+    }
+
+    if (!this._checkDimensions(
+      target,
+      width,
+      height,
+      level)) {
+      return
+    }
+
+    const data = convertPixels(pixels)
+    const rowStride = this._computeRowStride(width, pixelSize)
+    const imageSize = rowStride * height
+
+    if (data && data.length < imageSize) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (border !== 0 ||
+      (validCubeTarget(target) && width !== height)) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+    // Need to check for out of memory error
+    this._saveError()
+    super.texImage2D(
+      target,
+      level,
+      internalFormat,
+      width,
+      height,
+      border,
+      format,
+      type,
+      data)
+    const error = this.getError()
+    this._restoreError(error)
+    if (error !== gl.NO_ERROR) {
+      return
+    }
+
+    // Save width and height at level
+    texture._levelWidth[level] = width
+    texture._levelHeight[level] = height
+    texture._format = format
+    texture._type = type
+
+    const activeFramebuffer = this._activeFramebuffer
+    if (activeFramebuffer) {
+      let needsUpdate = false
+      const attachments = this._getAttachments()
+      for (let i = 0; i < attachments.length; ++i) {
+        if (activeFramebuffer._attachments[attachments[i]] === texture) {
+          needsUpdate = true
+          break
+        }
+      }
+      if (needsUpdate) {
+        this._updateFramebufferAttachments(this._activeFramebuffer)
+      }
+    }
+  }
+
+  texSubImage2D (
+    target,
+    level,
+    xoffset,
+    yoffset,
+    width,
+    height,
+    format,
+    type,
+    pixels) {
+    if (arguments.length === 7) {
+      pixels = format
+      type = height
+      format = width
+
+      pixels = extractImageData(pixels)
+
+      if (pixels == null) {
+        throw new TypeError('texSubImage2D(GLenum, GLint, GLint, GLint, GLenum, GLenum, ImageData | HTMLImageElement | HTMLCanvasElement | HTMLVideoElement)')
+      }
+
+      width = pixels.width
+      height = pixels.height
+      pixels = pixels.data
+    }
+
+    if (typeof pixels !== 'object') {
+      throw new TypeError('texSubImage2D(GLenum, GLint, GLint, GLint, GLint, GLint, GLenum, GLenum, Uint8Array)')
+    }
+
+    target |= 0
+    level |= 0
+    xoffset |= 0
+    yoffset |= 0
+    width |= 0
+    height |= 0
+    format |= 0
+    type |= 0
+
+    const texture = this._getTexImage(target)
+    if (!texture) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    if (type === gl.FLOAT && !this._extensions.oes_texture_float) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    const pixelSize = this._computePixelSize(type, format)
+    if (pixelSize === 0) {
+      return
+    }
+
+    if (!this._checkDimensions(
+      target,
+      width,
+      height,
+      level)) {
+      return
+    }
+
+    if (xoffset < 0 || yoffset < 0) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    const data = convertPixels(pixels)
+    const rowStride = this._computeRowStride(width, pixelSize)
+    const imageSize = rowStride * height
+
+    if (!data || data.length < imageSize) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    super.texSubImage2D(
+      target,
+      level,
+      xoffset,
+      yoffset,
+      width,
+      height,
+      format,
+      type,
+      data)
+  }
+
+  texParameterf (target, pname, param) {
+    target |= 0
+    pname |= 0
+    param = +param
+    if (this._checkTextureTarget(target)) {
+      this._verifyTextureCompleteness(target, pname, param)
+      switch (pname) {
+        case gl.TEXTURE_MIN_FILTER:
+        case gl.TEXTURE_MAG_FILTER:
+        case gl.TEXTURE_WRAP_S:
+        case gl.TEXTURE_WRAP_T:
+          return super.texParameterf(target, pname, param)
+      }
+
+      this.setError(gl.INVALID_ENUM)
+    }
+  }
+
+  texParameteri (target, pname, param) {
+    target |= 0
+    pname |= 0
+    param |= 0
+
+    if (this._checkTextureTarget(target)) {
+      this._verifyTextureCompleteness(target, pname, param)
+      switch (pname) {
+        case gl.TEXTURE_MIN_FILTER:
+        case gl.TEXTURE_MAG_FILTER:
+        case gl.TEXTURE_WRAP_S:
+        case gl.TEXTURE_WRAP_T:
+          return super.texParameteri(target, pname, param)
+      }
+
+      this.setError(gl.INVALID_ENUM)
+    }
+  }
+
+  useProgram (program) {
+    if (!checkObject(program)) {
+      throw new TypeError('useProgram(WebGLProgram)')
+    } else if (!program) {
+      this._switchActiveProgram(this._activeProgram)
+      this._activeProgram = null
+      return super.useProgram(0)
+    } else if (this._checkWrapper(program, WebGLProgram)) {
+      if (this._activeProgram !== program) {
+        this._switchActiveProgram(this._activeProgram)
+        this._activeProgram = program
+        program._refCount += 1
+      }
+      return super.useProgram(program._ | 0)
+    }
+  }
+
+  validateProgram (program) {
+    if (this._checkWrapper(program, WebGLProgram)) {
+      super.validateProgram(program._ | 0)
+      const error = this.getError()
+      if (error === gl.NO_ERROR) {
+        program._linkInfoLog = super.getProgramInfoLog(program._ | 0)
+      }
+      this.getError()
+      this.setError(error)
+    }
+  }
+
+  vertexAttribPointer (
+    index,
+    size,
+    type,
+    normalized,
+    stride,
+    offset) {
+    if (stride < 0 || offset < 0) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    index |= 0
+    size |= 0
+    type |= 0
+    normalized = !!normalized
+    stride |= 0
+    offset |= 0
+
+    if (stride < 0 ||
+      offset < 0 ||
+      index < 0 || index >= this._vertexAttribs.length ||
+      !(size === 1 || size === 2 || size === 3 || size === 4)) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    if (this._activeArrayBuffer === null) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    // fixed, int and unsigned int aren't allowed in WebGL
+    const byteSize = typeSize(type)
+    if (byteSize === 0 ||
+      type === gl.INT ||
+      type === gl.UNSIGNED_INT) {
+      this.setError(gl.INVALID_ENUM)
+      return
+    }
+
+    if (stride > 255 || stride < 0) {
+      this.setError(gl.INVALID_VALUE)
+      return
+    }
+
+    // stride and offset must be multiples of size
+    if ((stride % byteSize) !== 0 ||
+      (offset % byteSize) !== 0) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+
+    // Call vertex attrib pointer
+    super.vertexAttribPointer(index, size, type, normalized, stride, offset)
+
+    // Save attribute pointer state
+    const attrib = this._vertexAttribs[index]
+
+    if (attrib._pointerBuffer &&
+      attrib._pointerBuffer !== this._activeArrayBuffer) {
+      attrib._pointerBuffer._refCount -= 1
+      attrib._pointerBuffer._checkDelete()
+    }
+
+    this._activeArrayBuffer._refCount += 1
+    attrib._pointerBuffer = this._activeArrayBuffer
+    attrib._pointerSize = size * byteSize
+    attrib._pointerOffset = offset
+    attrib._pointerStride = stride || (size * byteSize)
+    attrib._pointerType = type
+    attrib._pointerNormal = normalized
+    attrib._inputStride = stride
+    attrib._inputSize = size
+  }
+
+  viewport (x, y, width, height) {
+    return super.viewport(x | 0, y | 0, width | 0, height | 0)
+  }
+
+  _allocateDrawingBuffer (width, height) {
+    this._drawingBuffer = new WebGLDrawingBufferWrapper(
+      super.createFramebuffer(),
+      super.createTexture(),
+      super.createRenderbuffer())
+
+    this._resizeDrawingBuffer(width, height)
+  }
+
+  isContextLost () {
+    return false
+  }
+
+  compressedTexImage2D () {
+    // TODO not yet implemented
+  }
+
+  compressedTexSubImage2D () {
+    // TODO not yet implemented
+  }
+
+  _checkUniformValid (location, v0, name, count, type) {
+    if (!checkObject(location)) {
+      throw new TypeError(`${name}(WebGLUniformLocation, ...)`)
+    } else if (!location) {
+      return false
+    } else if (this._checkLocationActive(location)) {
+      const utype = location._activeInfo.type
+      if (utype === gl.SAMPLER_2D || utype === gl.SAMPLER_CUBE) {
+        if (count !== 1) {
+          this.setError(gl.INVALID_VALUE)
+          return
+        }
+        if (type !== 'i') {
+          this.setError(gl.INVALID_OPERATION)
+          return
+        }
+        if (v0 < 0 || v0 >= this._textureUnits.length) {
+          this.setError(gl.INVALID_VALUE)
+          return false
+        }
+      }
+      if (uniformTypeSize(utype) > count) {
+        this.setError(gl.INVALID_OPERATION)
+        return false
+      }
+      return true
+    }
+    return false
+  }
+
+  _checkUniformValueValid (location, value, name, count, type) {
+    if (!checkObject(location) ||
+      !checkObject(value)) {
+      throw new TypeError(`${name}v(WebGLUniformLocation, Array)`)
+    } else if (!location) {
+      return false
+    } else if (!this._checkLocationActive(location)) {
+      return false
+    } else if (typeof value !== 'object' || !value || typeof value.length !== 'number') {
+      throw new TypeError(`Second argument to ${name} must be array`)
+    } else if (uniformTypeSize(location._activeInfo.type) > count) {
+      this.setError(gl.INVALID_OPERATION)
+      return false
+    } else if (value.length >= count && value.length % count === 0) {
+      if (location._array) {
+        return true
+      } else if (value.length === count) {
+        return true
+      } else {
+        this.setError(gl.INVALID_OPERATION)
+        return false
+      }
+    }
+    this.setError(gl.INVALID_VALUE)
+    return false
+  }
+
+  uniform1f (location, v0) {
+    if (!this._checkUniformValid(location, v0, 'uniform1f', 1, 'f')) return
+    super.uniform1f(location._ | 0, v0)
+  }
+  uniform1fv (location, value) {
+    if (!this._checkUniformValueValid(location, value, 'uniform1fv', 1, 'f')) return
+    if (location._array) {
+      const locs = location._array
+      for (let i = 0; i < locs.length && i < value.length; ++i) {
+        const loc = locs[i]
+        super.uniform1f(loc, value[i])
+      }
+      return
+    }
+    super.uniform1f(location._ | 0, value[0])
+  }
+  uniform1i (location, v0) {
+    if (!this._checkUniformValid(location, v0, 'uniform1i', 1, 'i')) return
+    super.uniform1i(location._ | 0, v0)
+  }
+  uniform1iv (location, value) {
+    if (!this._checkUniformValueValid(location, value, 'uniform1iv', 1, 'i')) return
+    if (location._array) {
+      const locs = location._array
+      for (let i = 0; i < locs.length && i < value.length; ++i) {
+        const loc = locs[i]
+        super.uniform1i(loc, value[i])
+      }
+      return
+    }
+    this.uniform1i(location, value[0])
+  }
+
+  uniform2f (location, v0, v1) {
+    if (!this._checkUniformValid(location, v0, 'uniform2f', 2, 'f')) return
+    super.uniform2f(location._ | 0, v0, v1)
+  }
+  uniform2fv (location, value) {
+    if (!this._checkUniformValueValid(location, value, 'uniform2fv', 2, 'f')) return
+    if (location._array) {
+      const locs = location._array
+      for (let i = 0; i < locs.length && 2 * i < value.length; ++i) {
+        const loc = locs[i]
+        super.uniform2f(loc, value[2 * i], value[(2 * i) + 1])
+      }
+      return
+    }
+    super.uniform2f(location._ | 0, value[0], value[1])
+  }
+  uniform2i (location, v0, v1) {
+    if (!this._checkUniformValid(location, v0, 'uniform2i', 2, 'i')) return
+    super.uniform2i(location._ | 0, v0, v1)
+  }
+  uniform2iv (location, value) {
+    if (!this._checkUniformValueValid(location, value, 'uniform2iv', 2, 'i')) return
+    if (location._array) {
+      const locs = location._array
+      for (let i = 0; i < locs.length && 2 * i < value.length; ++i) {
+        const loc = locs[i]
+        super.uniform2i(loc, value[2 * i], value[2 * i + 1])
+      }
+      return
+    }
+    this.uniform2i(location, value[0], value[1])
+  }
+
+  uniform3f (location, v0, v1, v2) {
+    if (!this._checkUniformValid(location, v0, 'uniform3f', 3, 'f')) return
+    super.uniform3f(location._ | 0, v0, v1, v2)
+  }
+  uniform3fv (location, value) {
+    if (!this._checkUniformValueValid(location, value, 'uniform3fv', 3, 'f')) return
+    if (location._array) {
+      const locs = location._array
+      for (let i = 0; i < locs.length && 3 * i < value.length; ++i) {
+        const loc = locs[i]
+        super.uniform3f(loc, value[3 * i], value[3 * i + 1], value[3 * i + 2])
+      }
+      return
+    }
+    super.uniform3f(location._ | 0, value[0], value[1], value[2])
+  }
+  uniform3i (location, v0, v1, v2) {
+    if (!this._checkUniformValid(location, v0, 'uniform3i', 3, 'i')) return
+    super.uniform3i(location._ | 0, v0, v1, v2)
+  }
+  uniform3iv (location, value) {
+    if (!this._checkUniformValueValid(location, value, 'uniform3iv', 3, 'i')) return
+    if (location._array) {
+      const locs = location._array
+      for (let i = 0; i < locs.length && 3 * i < value.length; ++i) {
+        const loc = locs[i]
+        super.uniform3i(loc, value[3 * i], value[3 * i + 1], value[3 * i + 2])
+      }
+      return
+    }
+    this.uniform3i(location, value[0], value[1], value[2])
+  }
+
+  uniform4f (location, v0, v1, v2, v3) {
+    if (!this._checkUniformValid(location, v0, 'uniform4f', 4, 'f')) return
+    super.uniform4f(location._ | 0, v0, v1, v2, v3)
+  }
+  uniform4fv (location, value) {
+    if (!this._checkUniformValueValid(location, value, 'uniform4fv', 4, 'f')) return
+    if (location._array) {
+      const locs = location._array
+      for (let i = 0; i < locs.length && 4 * i < value.length; ++i) {
+        const loc = locs[i]
+        super.uniform4f(loc, value[4 * i], value[4 * i + 1], value[4 * i + 2], value[4 * i + 3])
+      }
+      return
+    }
+    super.uniform4f(location._ | 0, value[0], value[1], value[2], value[3])
+  }
+  uniform4i (location, v0, v1, v2, v3) {
+    if (!this._checkUniformValid(location, v0, 'uniform4i', 4, 'i')) return
+    super.uniform4i(location._ | 0, v0, v1, v2, v3)
+  }
+  uniform4iv (location, value) {
+    if (!this._checkUniformValueValid(location, value, 'uniform4iv', 4, 'i')) return
+    if (location._array) {
+      const locs = location._array
+      for (let i = 0; i < locs.length && 4 * i < value.length; ++i) {
+        const loc = locs[i]
+        super.uniform4i(loc, value[4 * i], value[4 * i + 1], value[4 * i + 2], value[4 * i + 3])
+      }
+      return
+    }
+    this.uniform4i(location, value[0], value[1], value[2], value[3])
+  }
+
+  _checkUniformMatrix (location, transpose, value, name, count) {
+    if (!checkObject(location) ||
+      typeof value !== 'object') {
+      throw new TypeError(name + '(WebGLUniformLocation, Boolean, Array)')
+    } else if (!!transpose ||
+      typeof value !== 'object' ||
+      value === null ||
+      !value.length ||
+      value.length % count * count !== 0) {
+      this.setError(gl.INVALID_VALUE)
+      return false
+    }
+    if (!location) {
+      return false
+    }
+    if (!this._checkLocationActive(location)) {
+      return false
+    }
+
+    if (value.length === count * count) {
+      return true
+    } else if (location._array) {
+      return true
+    }
+    this.setError(gl.INVALID_VALUE)
+    return false
+  }
+  uniformMatrix2fv (location, transpose, value) {
+    if (!this._checkUniformMatrix(location, transpose, value, 'uniformMatrix2fv', 2)) return
+    const data = new Float32Array(value)
+    super.uniformMatrix2fv(
+      location._ | 0,
+      !!transpose,
+      data)
+  }
+  uniformMatrix3fv (location, transpose, value) {
+    if (!this._checkUniformMatrix(location, transpose, value, 'uniformMatrix3fv', 3)) return
+    const data = new Float32Array(value)
+    super.uniformMatrix3fv(
+      location._ | 0,
+      !!transpose,
+      data)
+  }
+  uniformMatrix4fv (location, transpose, value) {
+    if (!this._checkUniformMatrix(location, transpose, value, 'uniformMatrix4fv', 4)) return
+    const data = new Float32Array(value)
+    super.uniformMatrix4fv(
+      location._ | 0,
+      !!transpose,
+      data)
+  }
+
+  vertexAttrib1f (index, v0) {
+    index |= 0
+    if (!this._checkVertexIndex(index)) return
+    const data = this._vertexAttribs[index]._data
+    data[3] = 1
+    data[1] = data[2] = 0
+    data[0] = v0
+    return super.vertexAttrib1f(index | 0, +v0)
+  }
+  vertexAttrib2f (index, v0, v1) {
+    index |= 0
+    if (!this._checkVertexIndex(index)) return
+    const data = this._vertexAttribs[index]._data
+    data[3] = 1
+    data[2] = 0
+    data[1] = v1
+    data[0] = v0
+    return super.vertexAttrib2f(index | 0, +v0, +v1)
+  }
+  vertexAttrib3f (index, v0, v1, v2) {
+    index |= 0
+    if (!this._checkVertexIndex(index)) return
+    const data = this._vertexAttribs[index]._data
+    data[3] = 1
+    data[2] = v2
+    data[1] = v1
+    data[0] = v0
+    return super.vertexAttrib3f(index | 0, +v0, +v1, +v2)
+  }
+  vertexAttrib4f (index, v0, v1, v2, v3) {
+    index |= 0
+    if (!this._checkVertexIndex(index)) return
+    const data = this._vertexAttribs[index]._data
+    data[3] = v3
+    data[2] = v2
+    data[1] = v1
+    data[0] = v0
+    return super.vertexAttrib4f(index | 0, +v0, +v1, +v2, +v3)
+  }
+
+  vertexAttrib1fv (index, value) {
+    if (typeof value !== 'object' || value === null || value.length < 1) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+    const data = this._vertexAttribs[index]._data
+    data[3] = 1
+    data[2] = 0
+    data[1] = 0
+    data[0] = value[0]
+    return super.vertexAttrib1f(index | 0, +value[0])
+  }
+  vertexAttrib2fv (index, value) {
+    if (typeof value !== 'object' || value === null || value.length < 2) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+    const data = this._vertexAttribs[index]._data
+    data[3] = 1
+    data[2] = 0
+    data[1] = value[1]
+    data[0] = value[0]
+    return super.vertexAttrib2f(index | 0, +value[0], +value[1])
+  }
+  vertexAttrib3fv (index, value) {
+    if (typeof value !== 'object' || value === null || value.length < 3) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+    const data = this._vertexAttribs[index]._data
+    data[3] = 1
+    data[2] = value[2]
+    data[1] = value[1]
+    data[0] = value[0]
+    return super.vertexAttrib3f(index | 0, +value[0], +value[1], +value[2])
+  }
+  vertexAttrib4fv (index, value) {
+    if (typeof value !== 'object' || value === null || value.length < 4) {
+      this.setError(gl.INVALID_OPERATION)
+      return
+    }
+    const data = this._vertexAttribs[index]._data
+    data[3] = value[3]
+    data[2] = value[2]
+    data[1] = value[1]
+    data[0] = value[0]
+    return super.vertexAttrib4f(index | 0, +value[0], +value[1], +value[2], +value[3])
+  }
+}
+
+module.exports = { WebGLRenderingContext, wrapContext }
+
+},{"../../package.json":9,"./extensions/angle-instanced-arrays":11,"./extensions/oes-element-index-unit":12,"./extensions/oes-texture-float":13,"./extensions/stackgl-destroy-context":14,"./extensions/stackgl-resize-drawing-buffer":15,"./extensions/webgl-draw-buffers":16,"./native-gl":18,"./utils":20,"./webgl-active-info":21,"./webgl-buffer":22,"./webgl-drawing-buffer-wrapper":24,"./webgl-framebuffer":25,"./webgl-program":26,"./webgl-renderbuffer":27,"./webgl-shader":30,"./webgl-shader-precision-format":29,"./webgl-texture":32,"./webgl-uniform-location":33,"bit-twiddle":3,"glsl-tokenizer/string":41}],29:[function(require,module,exports){
+class WebGLShaderPrecisionFormat {
+  constructor (_) {
+    this.rangeMin = _.rangeMin
+    this.rangeMax = _.rangeMax
+    this.precision = _.precision
+  }
+}
+
+module.exports = { WebGLShaderPrecisionFormat }
+
+},{}],30:[function(require,module,exports){
+const { gl } = require('./native-gl')
+const { Linkable } = require('./linkable')
+
+class WebGLShader extends Linkable {
+  constructor (_, ctx, type) {
+    super(_)
+    this._type = type
+    this._ctx = ctx
+    this._source = ''
+    this._compileStatus = false
+    this._compileInfo = ''
+  }
+
+  _performDelete () {
+    const ctx = this._ctx
+    delete ctx._shaders[this._ | 0]
+    gl.deleteShader.call(ctx, this._ | 0)
+  }
+}
+
+module.exports = { WebGLShader }
+
+},{"./linkable":17,"./native-gl":18}],31:[function(require,module,exports){
+class WebGLTextureUnit {
+  constructor (ctx, idx) {
+    this._ctx = ctx
+    this._idx = idx
+    this._mode = 0
+    this._bind2D = null
+    this._bindCube = null
+  }
+}
+
+module.exports = { WebGLTextureUnit }
+
+},{}],32:[function(require,module,exports){
+const { Linkable } = require('./linkable')
+const { gl } = require('./native-gl')
+
+class WebGLTexture extends Linkable {
+  constructor (_, ctx) {
+    super(_)
+    this._ctx = ctx
+    this._binding = 0
+    this._levelWidth = new Int32Array(32)
+    this._levelHeight = new Int32Array(32)
+    this._format = 0
+    this._type = 0
+    this._complete = true
+  }
+
+  _performDelete () {
+    const ctx = this._ctx
+    delete ctx._textures[this._ | 0]
+    gl.deleteTexture.call(ctx, this._ | 0)
+  }
+}
+
+module.exports = { WebGLTexture }
+
+},{"./linkable":17,"./native-gl":18}],33:[function(require,module,exports){
+class WebGLUniformLocation {
+  constructor (_, program, info) {
+    this._ = _
+    this._program = program
+    this._linkCount = program._linkCount
+    this._activeInfo = info
+    this._array = null
+  }
+}
+
+module.exports = { WebGLUniformLocation }
+
+},{}],34:[function(require,module,exports){
+const { gl } = require('./native-gl')
+
+class WebGLVertexAttribute {
+  constructor (ctx, idx) {
+    this._ctx = ctx
+    this._idx = idx
+    this._isPointer = false
+    this._pointerBuffer = null
+    this._pointerOffset = 0
+    this._pointerSize = 0
+    this._pointerStride = 0
+    this._pointerType = gl.FLOAT
+    this._pointerNormal = false
+    this._divisor = 0
+    this._inputSize = 4
+    this._inputStride = 0
+    this._data = new Float32Array([0, 0, 0, 1])
+  }
+}
+
+module.exports = { WebGLVertexAttribute }
+
+},{"./native-gl":18}],35:[function(require,module,exports){
+module.exports = tokenize
+
+var literals100 = require('./lib/literals')
+  , operators = require('./lib/operators')
+  , builtins100 = require('./lib/builtins')
+  , literals300es = require('./lib/literals-300es')
+  , builtins300es = require('./lib/builtins-300es')
+
+var NORMAL = 999          // <-- never emitted
+  , TOKEN = 9999          // <-- never emitted
+  , BLOCK_COMMENT = 0
+  , LINE_COMMENT = 1
+  , PREPROCESSOR = 2
+  , OPERATOR = 3
+  , INTEGER = 4
+  , FLOAT = 5
+  , IDENT = 6
+  , BUILTIN = 7
+  , KEYWORD = 8
+  , WHITESPACE = 9
+  , EOF = 10
+  , HEX = 11
+
+var map = [
+    'block-comment'
+  , 'line-comment'
+  , 'preprocessor'
+  , 'operator'
+  , 'integer'
+  , 'float'
+  , 'ident'
+  , 'builtin'
+  , 'keyword'
+  , 'whitespace'
+  , 'eof'
+  , 'integer'
+]
+
+function tokenize(opt) {
+  var i = 0
+    , total = 0
+    , mode = NORMAL
+    , c
+    , last
+    , content = []
+    , tokens = []
+    , token_idx = 0
+    , token_offs = 0
+    , line = 1
+    , col = 0
+    , start = 0
+    , isnum = false
+    , isoperator = false
+    , input = ''
+    , len
+
+  opt = opt || {}
+  var allBuiltins = builtins100
+  var allLiterals = literals100
+  if (opt.version === '300 es') {
+    allBuiltins = builtins300es
+    allLiterals = literals300es
+  }
+
+  // cache by name
+  var builtinsDict = {}, literalsDict = {}
+  for (var i = 0; i < allBuiltins.length; i++) {
+    builtinsDict[allBuiltins[i]] = true
+  }
+  for (var i = 0; i < allLiterals.length; i++) {
+    literalsDict[allLiterals[i]] = true
+  }
+
+  return function(data) {
+    tokens = []
+    if (data !== null) return write(data)
+    return end()
+  }
+
+  function token(data) {
+    if (data.length) {
+      tokens.push({
+        type: map[mode]
+      , data: data
+      , position: start
+      , line: line
+      , column: col
+      })
+    }
+  }
+
+  function write(chunk) {
+    i = 0
+
+    if (chunk.toString) chunk = chunk.toString()
+
+    input += chunk.replace(/\r\n/g, '\n')
+    len = input.length
+
+
+    var last
+
+    while(c = input[i], i < len) {
+      last = i
+
+      switch(mode) {
+        case BLOCK_COMMENT: i = block_comment(); break
+        case LINE_COMMENT: i = line_comment(); break
+        case PREPROCESSOR: i = preprocessor(); break
+        case OPERATOR: i = operator(); break
+        case INTEGER: i = integer(); break
+        case HEX: i = hex(); break
+        case FLOAT: i = decimal(); break
+        case TOKEN: i = readtoken(); break
+        case WHITESPACE: i = whitespace(); break
+        case NORMAL: i = normal(); break
+      }
+
+      if(last !== i) {
+        switch(input[last]) {
+          case '\n': col = 0; ++line; break
+          default: ++col; break
+        }
+      }
+    }
+
+    total += i
+    input = input.slice(i)
+    return tokens
+  }
+
+  function end(chunk) {
+    if(content.length) {
+      token(content.join(''))
+    }
+
+    mode = EOF
+    token('(eof)')
+    return tokens
+  }
+
+  function normal() {
+    content = content.length ? [] : content
+
+    if(last === '/' && c === '*') {
+      start = total + i - 1
+      mode = BLOCK_COMMENT
+      last = c
+      return i + 1
+    }
+
+    if(last === '/' && c === '/') {
+      start = total + i - 1
+      mode = LINE_COMMENT
+      last = c
+      return i + 1
+    }
+
+    if(c === '#') {
+      mode = PREPROCESSOR
+      start = total + i
+      return i
+    }
+
+    if(/\s/.test(c)) {
+      mode = WHITESPACE
+      start = total + i
+      return i
+    }
+
+    isnum = /\d/.test(c)
+    isoperator = /[^\w_]/.test(c)
+
+    start = total + i
+    mode = isnum ? INTEGER : isoperator ? OPERATOR : TOKEN
+    return i
+  }
+
+  function whitespace() {
+    if(/[^\s]/g.test(c)) {
+      token(content.join(''))
+      mode = NORMAL
+      return i
+    }
+    content.push(c)
+    last = c
+    return i + 1
+  }
+
+  function preprocessor() {
+    if((c === '\r' || c === '\n') && last !== '\\') {
+      token(content.join(''))
+      mode = NORMAL
+      return i
+    }
+    content.push(c)
+    last = c
+    return i + 1
+  }
+
+  function line_comment() {
+    return preprocessor()
+  }
+
+  function block_comment() {
+    if(c === '/' && last === '*') {
+      content.push(c)
+      token(content.join(''))
+      mode = NORMAL
+      return i + 1
+    }
+
+    content.push(c)
+    last = c
+    return i + 1
+  }
+
+  function operator() {
+    if(last === '.' && /\d/.test(c)) {
+      mode = FLOAT
+      return i
+    }
+
+    if(last === '/' && c === '*') {
+      mode = BLOCK_COMMENT
+      return i
+    }
+
+    if(last === '/' && c === '/') {
+      mode = LINE_COMMENT
+      return i
+    }
+
+    if(c === '.' && content.length) {
+      while(determine_operator(content));
+
+      mode = FLOAT
+      return i
+    }
+
+    if(c === ';' || c === ')' || c === '(') {
+      if(content.length) while(determine_operator(content));
+      token(c)
+      mode = NORMAL
+      return i + 1
+    }
+
+    var is_composite_operator = content.length === 2 && c !== '='
+    if(/[\w_\d\s]/.test(c) || is_composite_operator) {
+      while(determine_operator(content));
+      mode = NORMAL
+      return i
+    }
+
+    content.push(c)
+    last = c
+    return i + 1
+  }
+
+  function determine_operator(buf) {
+    var j = 0
+      , idx
+      , res
+
+    do {
+      idx = operators.indexOf(buf.slice(0, buf.length + j).join(''))
+      res = operators[idx]
+
+      if(idx === -1) {
+        if(j-- + buf.length > 0) continue
+        res = buf.slice(0, 1).join('')
+      }
+
+      token(res)
+
+      start += res.length
+      content = content.slice(res.length)
+      return content.length
+    } while(1)
+  }
+
+  function hex() {
+    if(/[^a-fA-F0-9]/.test(c)) {
+      token(content.join(''))
+      mode = NORMAL
+      return i
+    }
+
+    content.push(c)
+    last = c
+    return i + 1
+  }
+
+  function integer() {
+    if(c === '.') {
+      content.push(c)
+      mode = FLOAT
+      last = c
+      return i + 1
+    }
+
+    if(/[eE]/.test(c)) {
+      content.push(c)
+      mode = FLOAT
+      last = c
+      return i + 1
+    }
+
+    if(c === 'x' && content.length === 1 && content[0] === '0') {
+      mode = HEX
+      content.push(c)
+      last = c
+      return i + 1
+    }
+
+    if(/[^\d]/.test(c)) {
+      token(content.join(''))
+      mode = NORMAL
+      return i
+    }
+
+    content.push(c)
+    last = c
+    return i + 1
+  }
+
+  function decimal() {
+    if(c === 'f') {
+      content.push(c)
+      last = c
+      i += 1
+    }
+
+    if(/[eE]/.test(c)) {
+      content.push(c)
+      last = c
+      return i + 1
+    }
+
+    if ((c === '-' || c === '+') && /[eE]/.test(last)) {
+      content.push(c)
+      last = c
+      return i + 1
+    }
+
+    if(/[^\d]/.test(c)) {
+      token(content.join(''))
+      mode = NORMAL
+      return i
+    }
+
+    content.push(c)
+    last = c
+    return i + 1
+  }
+
+  function readtoken() {
+    if(/[^\d\w_]/.test(c)) {
+      var contentstr = content.join('')
+      if(literalsDict[contentstr]) {
+        mode = KEYWORD
+      } else if(builtinsDict[contentstr]) {
+        mode = BUILTIN
+      } else {
+        mode = IDENT
+      }
+      token(content.join(''))
+      mode = NORMAL
+      return i
+    }
+    content.push(c)
+    last = c
+    return i + 1
+  }
+}
+
+},{"./lib/builtins":37,"./lib/builtins-300es":36,"./lib/literals":39,"./lib/literals-300es":38,"./lib/operators":40}],36:[function(require,module,exports){
+// 300es builtins/reserved words that were previously valid in v100
+var v100 = require('./builtins')
+
+// The texture2D|Cube functions have been removed
+// And the gl_ features are updated
+v100 = v100.slice().filter(function (b) {
+  return !/^(gl\_|texture)/.test(b)
+})
+
+module.exports = v100.concat([
+  // the updated gl_ constants
+    'gl_VertexID'
+  , 'gl_InstanceID'
+  , 'gl_Position'
+  , 'gl_PointSize'
+  , 'gl_FragCoord'
+  , 'gl_FrontFacing'
+  , 'gl_FragDepth'
+  , 'gl_PointCoord'
+  , 'gl_MaxVertexAttribs'
+  , 'gl_MaxVertexUniformVectors'
+  , 'gl_MaxVertexOutputVectors'
+  , 'gl_MaxFragmentInputVectors'
+  , 'gl_MaxVertexTextureImageUnits'
+  , 'gl_MaxCombinedTextureImageUnits'
+  , 'gl_MaxTextureImageUnits'
+  , 'gl_MaxFragmentUniformVectors'
+  , 'gl_MaxDrawBuffers'
+  , 'gl_MinProgramTexelOffset'
+  , 'gl_MaxProgramTexelOffset'
+  , 'gl_DepthRangeParameters'
+  , 'gl_DepthRange'
+
+  // other builtins
+  , 'trunc'
+  , 'round'
+  , 'roundEven'
+  , 'isnan'
+  , 'isinf'
+  , 'floatBitsToInt'
+  , 'floatBitsToUint'
+  , 'intBitsToFloat'
+  , 'uintBitsToFloat'
+  , 'packSnorm2x16'
+  , 'unpackSnorm2x16'
+  , 'packUnorm2x16'
+  , 'unpackUnorm2x16'
+  , 'packHalf2x16'
+  , 'unpackHalf2x16'
+  , 'outerProduct'
+  , 'transpose'
+  , 'determinant'
+  , 'inverse'
+  , 'texture'
+  , 'textureSize'
+  , 'textureProj'
+  , 'textureLod'
+  , 'textureOffset'
+  , 'texelFetch'
+  , 'texelFetchOffset'
+  , 'textureProjOffset'
+  , 'textureLodOffset'
+  , 'textureProjLod'
+  , 'textureProjLodOffset'
+  , 'textureGrad'
+  , 'textureGradOffset'
+  , 'textureProjGrad'
+  , 'textureProjGradOffset'
+])
+
+},{"./builtins":37}],37:[function(require,module,exports){
+module.exports = [
+  // Keep this list sorted
+  'abs'
+  , 'acos'
+  , 'all'
+  , 'any'
+  , 'asin'
+  , 'atan'
+  , 'ceil'
+  , 'clamp'
+  , 'cos'
+  , 'cross'
+  , 'dFdx'
+  , 'dFdy'
+  , 'degrees'
+  , 'distance'
+  , 'dot'
+  , 'equal'
+  , 'exp'
+  , 'exp2'
+  , 'faceforward'
+  , 'floor'
+  , 'fract'
+  , 'gl_BackColor'
+  , 'gl_BackLightModelProduct'
+  , 'gl_BackLightProduct'
+  , 'gl_BackMaterial'
+  , 'gl_BackSecondaryColor'
+  , 'gl_ClipPlane'
+  , 'gl_ClipVertex'
+  , 'gl_Color'
+  , 'gl_DepthRange'
+  , 'gl_DepthRangeParameters'
+  , 'gl_EyePlaneQ'
+  , 'gl_EyePlaneR'
+  , 'gl_EyePlaneS'
+  , 'gl_EyePlaneT'
+  , 'gl_Fog'
+  , 'gl_FogCoord'
+  , 'gl_FogFragCoord'
+  , 'gl_FogParameters'
+  , 'gl_FragColor'
+  , 'gl_FragCoord'
+  , 'gl_FragData'
+  , 'gl_FragDepth'
+  , 'gl_FragDepthEXT'
+  , 'gl_FrontColor'
+  , 'gl_FrontFacing'
+  , 'gl_FrontLightModelProduct'
+  , 'gl_FrontLightProduct'
+  , 'gl_FrontMaterial'
+  , 'gl_FrontSecondaryColor'
+  , 'gl_LightModel'
+  , 'gl_LightModelParameters'
+  , 'gl_LightModelProducts'
+  , 'gl_LightProducts'
+  , 'gl_LightSource'
+  , 'gl_LightSourceParameters'
+  , 'gl_MaterialParameters'
+  , 'gl_MaxClipPlanes'
+  , 'gl_MaxCombinedTextureImageUnits'
+  , 'gl_MaxDrawBuffers'
+  , 'gl_MaxFragmentUniformComponents'
+  , 'gl_MaxLights'
+  , 'gl_MaxTextureCoords'
+  , 'gl_MaxTextureImageUnits'
+  , 'gl_MaxTextureUnits'
+  , 'gl_MaxVaryingFloats'
+  , 'gl_MaxVertexAttribs'
+  , 'gl_MaxVertexTextureImageUnits'
+  , 'gl_MaxVertexUniformComponents'
+  , 'gl_ModelViewMatrix'
+  , 'gl_ModelViewMatrixInverse'
+  , 'gl_ModelViewMatrixInverseTranspose'
+  , 'gl_ModelViewMatrixTranspose'
+  , 'gl_ModelViewProjectionMatrix'
+  , 'gl_ModelViewProjectionMatrixInverse'
+  , 'gl_ModelViewProjectionMatrixInverseTranspose'
+  , 'gl_ModelViewProjectionMatrixTranspose'
+  , 'gl_MultiTexCoord0'
+  , 'gl_MultiTexCoord1'
+  , 'gl_MultiTexCoord2'
+  , 'gl_MultiTexCoord3'
+  , 'gl_MultiTexCoord4'
+  , 'gl_MultiTexCoord5'
+  , 'gl_MultiTexCoord6'
+  , 'gl_MultiTexCoord7'
+  , 'gl_Normal'
+  , 'gl_NormalMatrix'
+  , 'gl_NormalScale'
+  , 'gl_ObjectPlaneQ'
+  , 'gl_ObjectPlaneR'
+  , 'gl_ObjectPlaneS'
+  , 'gl_ObjectPlaneT'
+  , 'gl_Point'
+  , 'gl_PointCoord'
+  , 'gl_PointParameters'
+  , 'gl_PointSize'
+  , 'gl_Position'
+  , 'gl_ProjectionMatrix'
+  , 'gl_ProjectionMatrixInverse'
+  , 'gl_ProjectionMatrixInverseTranspose'
+  , 'gl_ProjectionMatrixTranspose'
+  , 'gl_SecondaryColor'
+  , 'gl_TexCoord'
+  , 'gl_TextureEnvColor'
+  , 'gl_TextureMatrix'
+  , 'gl_TextureMatrixInverse'
+  , 'gl_TextureMatrixInverseTranspose'
+  , 'gl_TextureMatrixTranspose'
+  , 'gl_Vertex'
+  , 'greaterThan'
+  , 'greaterThanEqual'
+  , 'inversesqrt'
+  , 'length'
+  , 'lessThan'
+  , 'lessThanEqual'
+  , 'log'
+  , 'log2'
+  , 'matrixCompMult'
+  , 'max'
+  , 'min'
+  , 'mix'
+  , 'mod'
+  , 'normalize'
+  , 'not'
+  , 'notEqual'
+  , 'pow'
+  , 'radians'
+  , 'reflect'
+  , 'refract'
+  , 'sign'
+  , 'sin'
+  , 'smoothstep'
+  , 'sqrt'
+  , 'step'
+  , 'tan'
+  , 'texture2D'
+  , 'texture2DLod'
+  , 'texture2DProj'
+  , 'texture2DProjLod'
+  , 'textureCube'
+  , 'textureCubeLod'
+  , 'texture2DLodEXT'
+  , 'texture2DProjLodEXT'
+  , 'textureCubeLodEXT'
+  , 'texture2DGradEXT'
+  , 'texture2DProjGradEXT'
+  , 'textureCubeGradEXT'
+]
+
+},{}],38:[function(require,module,exports){
+var v100 = require('./literals')
+
+module.exports = v100.slice().concat([
+   'layout'
+  , 'centroid'
+  , 'smooth'
+  , 'case'
+  , 'mat2x2'
+  , 'mat2x3'
+  , 'mat2x4'
+  , 'mat3x2'
+  , 'mat3x3'
+  , 'mat3x4'
+  , 'mat4x2'
+  , 'mat4x3'
+  , 'mat4x4'
+  , 'uvec2'
+  , 'uvec3'
+  , 'uvec4'
+  , 'samplerCubeShadow'
+  , 'sampler2DArray'
+  , 'sampler2DArrayShadow'
+  , 'isampler2D'
+  , 'isampler3D'
+  , 'isamplerCube'
+  , 'isampler2DArray'
+  , 'usampler2D'
+  , 'usampler3D'
+  , 'usamplerCube'
+  , 'usampler2DArray'
+  , 'coherent'
+  , 'restrict'
+  , 'readonly'
+  , 'writeonly'
+  , 'resource'
+  , 'atomic_uint'
+  , 'noperspective'
+  , 'patch'
+  , 'sample'
+  , 'subroutine'
+  , 'common'
+  , 'partition'
+  , 'active'
+  , 'filter'
+  , 'image1D'
+  , 'image2D'
+  , 'image3D'
+  , 'imageCube'
+  , 'iimage1D'
+  , 'iimage2D'
+  , 'iimage3D'
+  , 'iimageCube'
+  , 'uimage1D'
+  , 'uimage2D'
+  , 'uimage3D'
+  , 'uimageCube'
+  , 'image1DArray'
+  , 'image2DArray'
+  , 'iimage1DArray'
+  , 'iimage2DArray'
+  , 'uimage1DArray'
+  , 'uimage2DArray'
+  , 'image1DShadow'
+  , 'image2DShadow'
+  , 'image1DArrayShadow'
+  , 'image2DArrayShadow'
+  , 'imageBuffer'
+  , 'iimageBuffer'
+  , 'uimageBuffer'
+  , 'sampler1DArray'
+  , 'sampler1DArrayShadow'
+  , 'isampler1D'
+  , 'isampler1DArray'
+  , 'usampler1D'
+  , 'usampler1DArray'
+  , 'isampler2DRect'
+  , 'usampler2DRect'
+  , 'samplerBuffer'
+  , 'isamplerBuffer'
+  , 'usamplerBuffer'
+  , 'sampler2DMS'
+  , 'isampler2DMS'
+  , 'usampler2DMS'
+  , 'sampler2DMSArray'
+  , 'isampler2DMSArray'
+  , 'usampler2DMSArray'
+])
+
+},{"./literals":39}],39:[function(require,module,exports){
+module.exports = [
+  // current
+    'precision'
+  , 'highp'
+  , 'mediump'
+  , 'lowp'
+  , 'attribute'
+  , 'const'
+  , 'uniform'
+  , 'varying'
+  , 'break'
+  , 'continue'
+  , 'do'
+  , 'for'
+  , 'while'
+  , 'if'
+  , 'else'
+  , 'in'
+  , 'out'
+  , 'inout'
+  , 'float'
+  , 'int'
+  , 'uint'
+  , 'void'
+  , 'bool'
+  , 'true'
+  , 'false'
+  , 'discard'
+  , 'return'
+  , 'mat2'
+  , 'mat3'
+  , 'mat4'
+  , 'vec2'
+  , 'vec3'
+  , 'vec4'
+  , 'ivec2'
+  , 'ivec3'
+  , 'ivec4'
+  , 'bvec2'
+  , 'bvec3'
+  , 'bvec4'
+  , 'sampler1D'
+  , 'sampler2D'
+  , 'sampler3D'
+  , 'samplerCube'
+  , 'sampler1DShadow'
+  , 'sampler2DShadow'
+  , 'struct'
+
+  // future
+  , 'asm'
+  , 'class'
+  , 'union'
+  , 'enum'
+  , 'typedef'
+  , 'template'
+  , 'this'
+  , 'packed'
+  , 'goto'
+  , 'switch'
+  , 'default'
+  , 'inline'
+  , 'noinline'
+  , 'volatile'
+  , 'public'
+  , 'static'
+  , 'extern'
+  , 'external'
+  , 'interface'
+  , 'long'
+  , 'short'
+  , 'double'
+  , 'half'
+  , 'fixed'
+  , 'unsigned'
+  , 'input'
+  , 'output'
+  , 'hvec2'
+  , 'hvec3'
+  , 'hvec4'
+  , 'dvec2'
+  , 'dvec3'
+  , 'dvec4'
+  , 'fvec2'
+  , 'fvec3'
+  , 'fvec4'
+  , 'sampler2DRect'
+  , 'sampler3DRect'
+  , 'sampler2DRectShadow'
+  , 'sizeof'
+  , 'cast'
+  , 'namespace'
+  , 'using'
+]
+
+},{}],40:[function(require,module,exports){
+module.exports = [
+    '<<='
+  , '>>='
+  , '++'
+  , '--'
+  , '<<'
+  , '>>'
+  , '<='
+  , '>='
+  , '=='
+  , '!='
+  , '&&'
+  , '||'
+  , '+='
+  , '-='
+  , '*='
+  , '/='
+  , '%='
+  , '&='
+  , '^^'
+  , '^='
+  , '|='
+  , '('
+  , ')'
+  , '['
+  , ']'
+  , '.'
+  , '!'
+  , '~'
+  , '*'
+  , '/'
+  , '%'
+  , '+'
+  , '-'
+  , '<'
+  , '>'
+  , '&'
+  , '^'
+  , '|'
+  , '?'
+  , ':'
+  , '='
+  , ','
+  , ';'
+  , '{'
+  , '}'
+]
+
+},{}],41:[function(require,module,exports){
+var tokenize = require('./index')
+
+module.exports = tokenizeString
+
+function tokenizeString(str, opt) {
+  var generator = tokenize(opt)
+  var tokens = []
+
+  tokens = tokens.concat(generator(str))
+  tokens = tokens.concat(generator(null))
+
+  return tokens
+}
+
+},{"./index":35}],42:[function(require,module,exports){
 function setupArguments(args) {
   const newArguments = new Array(args.length);
   for (let i = 0; i < args.length; i++) {
@@ -705,7 +8967,7 @@ module.exports = {
   gpuMock
 };
 
-},{}],4:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 (function (global, factory) {
 	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
 	typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -6052,7 +14314,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
 })));
 
-},{}],5:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 const { utils } = require('./utils');
 
 /**
@@ -6071,7 +14333,7 @@ function alias(name, source) {
 module.exports = {
   alias
 };
-},{"./utils":89}],6:[function(require,module,exports){
+},{"./utils":150}],45:[function(require,module,exports){
 const { FunctionNode } = require('../function-node');
 
 /**
@@ -6213,12 +14475,7 @@ class CPUFunctionNode extends FunctionNode {
         if (this.constants && this.constants.hasOwnProperty(idtNode.name)) {
           retArr.push('constants_' + idtNode.name);
         } else {
-          const name = this.getKernelArgumentName(idtNode.name);
-          if (name) {
-            retArr.push('user_' + name);
-          } else {
-            retArr.push('user_' + idtNode.name);
-          }
+          retArr.push('user_' + idtNode.name);
         }
     }
 
@@ -6361,7 +14618,7 @@ class CPUFunctionNode extends FunctionNode {
   astAssignmentExpression(assNode, retArr) {
     const declaration = this.getDeclaration(assNode.left);
     if (declaration && !declaration.assignable) {
-      throw new this.astErrorOutput(`Variable ${assNode.left.name} is not assignable here`, assNode);
+      throw this.astErrorOutput(`Variable ${assNode.left.name} is not assignable here`, assNode);
     }
     this.astGeneric(assNode.left, retArr);
     retArr.push(assNode.operator);
@@ -6574,8 +14831,7 @@ class CPUFunctionNode extends FunctionNode {
 
     // handle more complex types
     // argument may have come from a parent
-    const synonymName = this.getKernelArgumentName(name);
-    const markupName = `${origin}_${synonymName || name}`;
+    const markupName = `${origin}_${name}`;
 
     switch (type) {
       case 'Array(2)':
@@ -6595,7 +14851,7 @@ class CPUFunctionNode extends FunctionNode {
           isInput = this.constantTypes[name] === 'Input';
           size = isInput ? constant.size : null;
         } else {
-          isInput = this.isInput(synonymName || name);
+          isInput = this.isInput(name);
           size = isInput ? this.argumentSizes[this.argumentNames.indexOf(name)] : null;
         }
         retArr.push(`${ markupName }`);
@@ -6634,7 +14890,7 @@ class CPUFunctionNode extends FunctionNode {
             this.astGeneric(xProperty, retArr);
             retArr.push(']');
           }
-        } else {
+        } else if (typeof xProperty !== 'undefined') {
           retArr.push('[');
           this.astGeneric(xProperty, retArr);
           retArr.push(']');
@@ -6727,7 +14983,7 @@ class CPUFunctionNode extends FunctionNode {
 module.exports = {
   CPUFunctionNode
 };
-},{"../function-node":10}],7:[function(require,module,exports){
+},{"../function-node":49}],46:[function(require,module,exports){
 const { utils } = require('../../utils');
 const { Input } = require('../../input');
 
@@ -6841,16 +15097,25 @@ function cpuKernelString(cpuKernel, name) {
       }
     })
     beforeReturn.push(flattenedImageTo3DArray);
-    thisProperties.push(`    _imageTo2DArray,`);
+    thisProperties.push(`    _mediaTo2DArray,`);
     thisProperties.push(`    _imageTo3DArray,`);
   } else if (cpuKernel.argumentTypes.indexOf('HTMLImage') !== -1 || constantTypes.indexOf('HTMLImage') !== -1) {
-    const flattenedImageTo2DArray = utils.flattenFunctionToString((useFunctionKeyword ? 'function ' : '') + cpuKernel._imageTo2DArray.toString(), {
-      findDependency: () => {
-        debugger;
+    const flattenedImageTo2DArray = utils.flattenFunctionToString((useFunctionKeyword ? 'function ' : '') + cpuKernel._mediaTo2DArray.toString(), {
+      findDependency: (object, name) => {
+        return null;
+      },
+      thisLookup: (propertyName) => {
+        switch (propertyName) {
+          case 'canvas':
+            return 'settings.canvas';
+          case 'context':
+            return 'settings.context';
+        }
+        throw new Error('unhandled thisLookup');
       }
     });
     beforeReturn.push(flattenedImageTo2DArray);
-    thisProperties.push(`    _imageTo2DArray,`);
+    thisProperties.push(`    _mediaTo2DArray,`);
   }
 
   return `function(settings) {
@@ -6876,7 +15141,7 @@ ${cpuKernel._kernelString}
 module.exports = {
   cpuKernelString
 };
-},{"../../input":85,"../../utils":89}],8:[function(require,module,exports){
+},{"../../input":146,"../../utils":150}],47:[function(require,module,exports){
 const { Kernel } = require('../kernel');
 const { FunctionBuilder } = require('../function-builder');
 const { CPUFunctionNode } = require('./function-node');
@@ -7097,6 +15362,7 @@ class CPUKernel extends Kernel {
       kernelThreadString = translatedSources.shift();
     }
     const kernelString = this._kernelString = `  const LOOP_MAX = ${ this._getLoopMaxString() }
+  ${ this.injectedNative || '' }
   const constants = this.constants;
   const _this = this;
   return (${ this.argumentNames.map(argumentName => 'user_' + argumentName).join(', ') }) => {
@@ -7135,7 +15401,8 @@ class CPUKernel extends Kernel {
       const type = this.constantTypes[p];
       switch (type) {
         case 'HTMLImage':
-          result.push(`    const constants_${p} = this._imageTo2DArray(this.constants.${p});\n`);
+        case 'HTMLVideo':
+          result.push(`    const constants_${p} = this._mediaTo2DArray(this.constants.${p});\n`);
           break;
         case 'HTMLImageArray':
           result.push(`    const constants_${p} = this._imageTo3DArray(this.constants.${p});\n`);
@@ -7156,7 +15423,8 @@ class CPUKernel extends Kernel {
       const variableName = `user_${this.argumentNames[i]}`;
       switch (this.argumentTypes[i]) {
         case 'HTMLImage':
-          result.push(`    ${variableName} = this._imageTo2DArray(${variableName});\n`);
+        case 'HTMLVideo':
+          result.push(`    ${variableName} = this._mediaTo2DArray(${variableName});\n`);
           break;
         case 'HTMLImageArray':
           result.push(`    ${variableName} = this._imageTo3DArray(${variableName});\n`);
@@ -7191,22 +15459,24 @@ class CPUKernel extends Kernel {
     return result.join('');
   }
 
-  _imageTo2DArray(image) {
+  _mediaTo2DArray(media) {
     const canvas = this.canvas;
-    if (canvas.width < image.width) {
-      canvas.width = image.width;
+    const width = media.width > 0 ? media.width : media.videoWidth;
+    const height = media.height > 0 ? media.height : media.videoHeight;
+    if (canvas.width < width) {
+      canvas.width = width;
     }
-    if (canvas.height < image.height) {
-      canvas.height = image.height;
+    if (canvas.height < height) {
+      canvas.height = height;
     }
     const ctx = this.context;
-    ctx.drawImage(image, 0, 0, image.width, image.height);
-    const pixelsData = ctx.getImageData(0, 0, image.width, image.height).data;
-    const imageArray = new Array(image.height);
+    ctx.drawImage(media, 0, 0, width, height);
+    const pixelsData = ctx.getImageData(0, 0, width, height).data;
+    const imageArray = new Array(height);
     let index = 0;
-    for (let y = image.height - 1; y >= 0; y--) {
-      const row = imageArray[y] = new Array(image.width);
-      for (let x = 0; x < image.width; x++) {
+    for (let y = height - 1; y >= 0; y--) {
+      const row = imageArray[y] = new Array(width);
+      for (let x = 0; x < width; x++) {
         const pixel = new Float32Array(4);
         pixel[0] = pixelsData[index++] / 255; // r
         pixel[1] = pixelsData[index++] / 255; // g
@@ -7227,7 +15497,7 @@ class CPUKernel extends Kernel {
   _imageTo3DArray(images) {
     const imagesArray = new Array(images.length);
     for (let i = 0; i < images.length; i++) {
-      imagesArray[i] = this._imageTo2DArray(images[i]);
+      imagesArray[i] = this._mediaTo2DArray(images[i]);
     }
     return imagesArray;
   }
@@ -7410,7 +15680,7 @@ class CPUKernel extends Kernel {
 module.exports = {
   CPUKernel
 };
-},{"../../utils":89,"../function-builder":9,"../kernel":35,"./function-node":6,"./kernel-string":7}],9:[function(require,module,exports){
+},{"../../utils":150,"../function-builder":48,"../kernel":74,"./function-node":45,"./kernel-string":46}],48:[function(require,module,exports){
 /**
  * @desc This handles all the raw state, converted state, etc. of a single function.
  * [INTERNAL] A collection of functionNodes.
@@ -7428,12 +15698,11 @@ class FunctionBuilder {
   static fromKernel(kernel, FunctionNode, extraNodeOptions) {
     const {
       kernelArguments,
+      kernelConstants,
       argumentNames,
-      argumentTypes,
       argumentSizes,
       argumentBitRatios,
       constants,
-      constantTypes,
       constantBitRatios,
       debug,
       loopMaxIterations,
@@ -7451,6 +15720,18 @@ class FunctionBuilder {
       dynamicOutput,
       warnVarUsage,
     } = kernel;
+
+    const argumentTypes = new Array(kernelArguments.length);
+    const constantTypes = {};
+
+    for (let i = 0; i < kernelArguments.length; i++) {
+      argumentTypes[i] = kernelArguments[i].type;
+    }
+
+    for (let i = 0; i < kernelConstants.length; i++) {
+      const kernelConstant = kernelConstants[i];
+      constantTypes[kernelConstant.name] = kernelConstant.type;
+    }
 
     const needsArgumentType = (functionName, index) => {
       return functionBuilder.needsArgumentType(functionName, index);
@@ -7480,12 +15761,8 @@ class FunctionBuilder {
       functionBuilder.assignArgumentType(functionName, i, argumentType, requestingNode);
     };
 
-    const triggerTrackArgumentSynonym = (functionName, argumentName, calleeFunctionName, argumentIndex) => {
-      functionBuilder.trackArgumentSynonym(functionName, argumentName, calleeFunctionName, argumentIndex);
-    };
-
-    const lookupArgumentSynonym = (originFunctionName, functionName, argumentName) => {
-      return functionBuilder.lookupArgumentSynonym(originFunctionName, functionName, argumentName);
+    const triggerImplyArgumentBitRatio = (functionName, argumentName, calleeFunctionName, argumentIndex) => {
+      functionBuilder.assignArgumentBitRatio(functionName, argumentName, calleeFunctionName, argumentIndex);
     };
 
     const onFunctionCall = (functionName, calleeFunctionName, args) => {
@@ -7509,8 +15786,7 @@ class FunctionBuilder {
         needsArgumentType,
         assignArgumentType,
         triggerImplyArgumentType,
-        triggerTrackArgumentSynonym,
-        lookupArgumentSynonym,
+        triggerImplyArgumentBitRatio,
         onFunctionCall,
         warnVarUsage,
       }));
@@ -7528,8 +15804,7 @@ class FunctionBuilder {
       needsArgumentType,
       assignArgumentType,
       triggerImplyArgumentType,
-      triggerTrackArgumentSynonym,
-      lookupArgumentSynonym,
+      triggerImplyArgumentBitRatio,
       onFunctionCall,
       optimizeFloatMemory,
       precision,
@@ -7580,8 +15855,7 @@ class FunctionBuilder {
         needsArgumentType,
         assignArgumentType,
         triggerImplyArgumentType,
-        triggerTrackArgumentSynonym,
-        lookupArgumentSynonym,
+        triggerImplyArgumentBitRatio,
         onFunctionCall,
       }));
     }
@@ -7855,63 +16129,15 @@ class FunctionBuilder {
       }
     }
 
-    // function not found, maybe native?
     return null;
-
-    /**
-     * first iteration
-     * kernel.outputs = Array
-     * kernel.targets = Array
-     * kernel.returns = null
-     * kernel.calls.calcErrorOutput = [kernel.output, kernel.targets]
-     * kernel.calls.calcDeltas = [calcErrorOutput.returns, kernel.output]
-     * calcErrorOutput.output = null
-     * calcErrorOutput.targets = null
-     * calcErrorOutput.returns = null
-     * calcDeltasSigmoid.error = null
-     * calcDeltasSigmoid.output = Number
-     * calcDeltasSigmoid.returns = null
-     *
-     * resolvable are:
-     * calcErrorOutput.output
-     * calcErrorOutput.targets
-     * calcErrorOutput.returns
-     *
-     * second iteration
-     * kernel.outputs = Array
-     * kernel.targets = Array
-     * kernel.returns = null
-     * kernel.calls.calcErrorOutput = [kernel.output, kernel.targets]
-     * kernel.calls.calcDeltas = [calcErrorOutput.returns, kernel.output]
-     * calcErrorOutput.output = Number
-     * calcErrorOutput.targets = Array
-     * calcErrorOutput.returns = Number
-     * calcDeltasSigmoid.error = null
-     * calcDeltasSigmoid.output = Number
-     * calcDeltasSigmoid.returns = null
-     *
-     * resolvable are:
-     * calcDeltasSigmoid.error
-     * calcDeltasSigmoid.returns
-     * kernel.returns
-     *
-     * third iteration
-     * kernel.outputs = Array
-     * kernel.targets = Array
-     * kernel.returns = Number
-     * kernel.calls.calcErrorOutput = [kernel.output, kernel.targets]
-     * kernel.calls.calcDeltas = [calcErrorOutput.returns, kernel.output]
-     * calcErrorOutput.output = Number
-     * calcErrorOutput.targets = Array
-     * calcErrorOutput.returns = Number
-     * calcDeltasSigmoid.error = Number
-     * calcDeltasSigmoid.output = Number
-     * calcDeltasSigmoid.returns = Number
-     *
-     *
-     */
   }
 
+  /**
+   *
+   * @param {String} functionName
+   * @return {FunctionNode}
+   * @private
+   */
   _getFunction(functionName) {
     if (!this._isFunction(functionName)) {
       new Error(`Function ${functionName} not found`);
@@ -7955,6 +16181,12 @@ class FunctionBuilder {
     return this._getFunction(functionName).argumentNames[argumentIndex];
   }
 
+  /**
+   *
+   * @param {string} functionName
+   * @param {string} argumentName
+   * @return {number}
+   */
   lookupFunctionArgumentBitRatio(functionName, argumentName) {
     if (!this._isFunction(functionName)) {
       throw new Error('function not found');
@@ -7963,17 +16195,18 @@ class FunctionBuilder {
       const i = this.rootNode.argumentNames.indexOf(argumentName);
       if (i !== -1) {
         return this.rootNode.argumentBitRatios[i];
-      } else {
-        throw new Error('argument bit ratio not found');
       }
-    } else {
-      const node = this._getFunction(functionName);
-      const argumentSynonym = node.argumentSynonym[node.synonymIndex];
-      if (!argumentSynonym) {
-        throw new Error('argument synonym not found');
-      }
-      return this.lookupFunctionArgumentBitRatio(argumentSynonym.functionName, argumentSynonym.argumentName);
     }
+    const node = this._getFunction(functionName);
+    const i = node.argumentNames.indexOf(argumentName);
+    if (i === -1) {
+      throw new Error('argument not found');
+    }
+    const bitRatio = node.argumentBitRatios[i];
+    if (typeof bitRatio !== 'number') {
+      throw new Error('argument bit ratio not found');
+    }
+    return bitRatio;
   }
 
   needsArgumentType(functionName, i) {
@@ -7990,37 +16223,36 @@ class FunctionBuilder {
     }
   }
 
-  trackArgumentSynonym(functionName, argumentName, calleeFunctionName, argumentIndex) {
-    if (!this._isFunction(calleeFunctionName)) return;
-    const node = this._getFunction(calleeFunctionName);
-    if (!node.argumentSynonym) {
-      node.argumentSynonym = {};
-    }
-    const calleeArgumentName = node.argumentNames[argumentIndex];
-    if (!node.argumentSynonym[calleeArgumentName]) {
-      node.argumentSynonym[calleeArgumentName] = {};
-    }
-    node.synonymIndex++;
-    node.argumentSynonym[node.synonymIndex] = {
-      functionName,
-      argumentName,
-      calleeArgumentName,
-      calleeFunctionName,
-    };
-  }
-
-  lookupArgumentSynonym(originFunctionName, functionName, argumentName) {
-    if (originFunctionName === functionName) return argumentName;
-    if (!this._isFunction(functionName)) return null;
+  /**
+   * @param {string} functionName
+   * @param {string} argumentName
+   * @param {string} calleeFunctionName
+   * @param {number} argumentIndex
+   * @return {number}
+   */
+  assignArgumentBitRatio(functionName, argumentName, calleeFunctionName, argumentIndex) {
     const node = this._getFunction(functionName);
-    const argumentSynonym = node.argumentSynonym[node.synonymUseIndex];
-    if (!argumentSynonym) return null;
-    if (argumentSynonym.calleeArgumentName !== argumentName) return null;
-    node.synonymUseIndex++;
-    if (originFunctionName !== functionName) {
-      return this.lookupArgumentSynonym(originFunctionName, argumentSynonym.functionName, argumentSynonym.argumentName);
+    const calleeNode = this._getFunction(calleeFunctionName);
+    const i = node.argumentNames.indexOf(argumentName);
+    if (i === -1) {
+      throw new Error(`Argument ${argumentName} not found in arguments from function ${functionName}`);
     }
-    return argumentSynonym.argumentName;
+    const bitRatio = node.argumentBitRatios[i];
+    if (typeof bitRatio !== 'number') {
+      throw new Error(`Bit ratio for argument ${argumentName} not found in function ${functionName}`);
+    }
+    if (!calleeNode.argumentBitRatios) {
+      calleeNode.argumentBitRatios = new Array(calleeNode.argumentNames.length);
+    }
+    const calleeBitRatio = calleeNode.argumentBitRatios[i];
+    if (typeof calleeBitRatio === 'number') {
+      if (calleeBitRatio !== bitRatio) {
+        throw new Error(`Incompatible bit ratio found at function ${functionName} at argument ${argumentName}`);
+      }
+      return calleeBitRatio;
+    }
+    calleeNode.argumentBitRatios[i] = bitRatio;
+    return bitRatio;
   }
 
   trackFunctionCall(functionName, calleeFunctionName, args) {
@@ -8068,7 +16300,7 @@ class FunctionBuilder {
 module.exports = {
   FunctionBuilder
 };
-},{}],10:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 const acorn = require('acorn');
 const { utils } = require('../utils');
 const { FunctionTracer } = require('./function-tracer');
@@ -8113,8 +16345,7 @@ class FunctionNode {
     this.lookupFunctionArgumentTypes = null;
     this.lookupFunctionArgumentBitRatio = null;
     this.triggerImplyArgumentType = null;
-    this.triggerTrackArgumentSynonym = null;
-    this.lookupArgumentSynonym = null;
+    this.triggerImplyArgumentBitRatio = null;
     this.onNestedFunction = null;
     this.onFunctionCall = null;
     this.optimizeFloatMemory = null;
@@ -8143,9 +16374,6 @@ class FunctionNode {
       }
     }
 
-    this.synonymIndex = -1;
-    this.synonymUseIndex = 0;
-    this.argumentSynonym = {};
     this.literalTypes = {};
 
     this.validate();
@@ -8409,20 +16637,6 @@ class FunctionNode {
     throw new Error(`Type for constant "${ constantName }" not declared`);
   }
 
-  /**
-   * @desc Return the name of the *user argument*(subKernel argument) corresponding
-   * to the argument supplied to the kernel
-   *
-   * @param {String} name - Name of the argument
-   * @returns {String} Name of the parameter
-   */
-  getKernelArgumentName(name) {
-    if (!this.lookupArgumentSynonym) return null;
-    const argumentIndex = this.argumentNames.indexOf(name);
-    if (argumentIndex === -1) return null;
-    return this.lookupArgumentSynonym('kernel', this.name, name);
-  }
-
   toString() {
     if (this._string) return this._string;
     return this._string = this.astGeneric(this.getJsAST(), []).join('').trim();
@@ -8521,6 +16735,18 @@ class FunctionNode {
                 return 'Integer';
           }
           const type = this.getType(ast.left);
+          if (this.isState('skip-literal-correction')) return type;
+          if (type === 'LiteralInteger') {
+            const rightType = this.getType(ast.right);
+            if (rightType === 'LiteralInteger') {
+              if (ast.left.value % 1 === 0) {
+                return 'Integer';
+              } else {
+                return 'Float';
+              }
+            }
+            return rightType;
+          }
           return typeLookupMap[type] || type;
         case 'UpdateExpression':
           return this.getType(ast.argument);
@@ -8752,6 +16978,11 @@ class FunctionNode {
       case 'AssignmentExpression':
         this.getDependencies(ast.left, dependencies, isNotSafe);
         this.getDependencies(ast.right, dependencies, isNotSafe);
+        return dependencies;
+      case 'ConditionalExpression':
+        this.getDependencies(ast.test, dependencies, isNotSafe);
+        this.getDependencies(ast.alternate, dependencies, isNotSafe);
+        this.getDependencies(ast.consequent, dependencies, isNotSafe);
         return dependencies;
       case 'Literal':
         dependencies.push({
@@ -9557,9 +17788,19 @@ const typeLookupMap = {
   'Array3D': 'Number',
   'Input': 'Number',
   'HTMLImage': 'Array(4)',
+  'HTMLVideo': 'Array(4)',
   'HTMLImageArray': 'Array(4)',
   'NumberTexture': 'Number',
   'MemoryOptimizedNumberTexture': 'Number',
+  'Array1D(2)': 'Array(2)',
+  'Array1D(3)': 'Array(3)',
+  'Array1D(4)': 'Array(4)',
+  'Array2D(2)': 'Array(2)',
+  'Array2D(3)': 'Array(3)',
+  'Array2D(4)': 'Array(4)',
+  'Array3D(2)': 'Array(2)',
+  'Array3D(3)': 'Array(3)',
+  'Array3D(4)': 'Array(4)',
   'ArrayTexture(1)': 'Number',
   'ArrayTexture(2)': 'Array(2)',
   'ArrayTexture(3)': 'Array(3)',
@@ -9569,7 +17810,7 @@ const typeLookupMap = {
 module.exports = {
   FunctionNode
 };
-},{"../utils":89,"./function-tracer":11,"acorn":4}],11:[function(require,module,exports){
+},{"../utils":150,"./function-tracer":50,"acorn":43}],50:[function(require,module,exports){
 class FunctionTracer {
   constructor(ast) {
     this.runningContexts = [];
@@ -9600,6 +17841,7 @@ class FunctionTracer {
    * @param ast
    */
   scan(ast) {
+    if (!ast) return;
     if (Array.isArray(ast)) {
       for (let i = 0; i < ast.length; i++) {
         this.scan(ast[i]);
@@ -9616,16 +17858,15 @@ class FunctionTracer {
         });
         break;
       case 'AssignmentExpression':
+      case 'LogicalExpression':
         this.scan(ast.left);
         this.scan(ast.right);
         break;
       case 'BinaryExpression':
         this.scan(ast.left);
-        if (ast.right) this.scan(ast.right);
+        this.scan(ast.right);
         break;
       case 'UpdateExpression':
-        this.scan(ast.argument);
-        break;
       case 'UnaryExpression':
         this.scan(ast.argument);
         break;
@@ -9662,14 +17903,10 @@ class FunctionTracer {
         break;
       case 'ForStatement':
         this.newContext(() => {
-          if (ast.init) {
-            this.inLoopInit = true;
-            this.scan(ast.init);
-            this.inLoopInit = false;
-          }
-          if (ast.test) {
-            this.scan(ast.test);
-          }
+          this.inLoopInit = true;
+          this.scan(ast.init);
+          this.inLoopInit = false;
+          this.scan(ast.test);
           this.scan(ast.update);
           this.newContext(() => {
             this.scan(ast.body);
@@ -9700,8 +17937,6 @@ class FunctionTracer {
       case 'ExpressionStatement':
         this.scan(ast.expression);
         break;
-      case 'ThisExpression':
-        break;
       case 'CallExpression':
         this.functionCalls.push({
           context: this.currentContext,
@@ -9722,21 +17957,18 @@ class FunctionTracer {
         this.scan(ast.cases);
         break;
       case 'SwitchCase':
-        if (ast.test) this.scan(ast.test);
+        this.scan(ast.test);
         this.scan(ast.consequent);
         break;
-      case 'LogicalExpression':
-        this.scan(ast.left);
-        this.scan(ast.right);
-        break;
+
+      case 'ThisExpression':
       case 'Literal':
-        break;
       case 'DebuggerStatement':
-        break;
       case 'EmptyStatement':
-        break;
       case 'BreakStatement':
+      case 'ContinueStatement':
         break;
+
       default:
         throw new Error(`unhandled type "${ast.type}"`);
     }
@@ -9746,7 +17978,7 @@ class FunctionTracer {
 module.exports = {
   FunctionTracer,
 };
-},{}],12:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 const { glWiretap } = require('gl-wiretap');
 const { utils } = require('../../utils');
 
@@ -9767,6 +17999,17 @@ function toStringWithoutUtils(fn) {
  * @returns {string}
  */
 function glKernelString(Kernel, args, originKernel, setupContextString, destroyContextString) {
+  args = args ? Array.from(args).map(arg => {
+    switch (typeof arg) {
+      case 'boolean':
+        return new Boolean(arg);
+      case 'number':
+        return new Number(arg);
+      default:
+        return arg;
+    }
+  }) : null;
+  const uploadedValues = [];
   const postResult = [];
   const context = glWiretap(originKernel.context, {
     useTrackablePrimitives: true,
@@ -9791,19 +18034,15 @@ function glKernelString(Kernel, args, originKernel, setupContextString, destroyC
       }
     },
     onUnrecognizedArgumentLookup: (argument) => {
-      for (let i = 0; i < kernel.kernelConstants.length; i++) {
-        const value = kernel.kernelConstants[i];
-        if (value.type === 'HTMLImageArray') {
-          const constant = kernel.constants[value.name];
-          const variable = `uploadValue_${value.name}[${constant.indexOf(value.uploadValue)}]`;
-          context.insertVariable(variable, kernel.constants);
-          return variable;
-        } else if (value.uploadValue === argument) {
-          const variable = `uploadValue_${value.name}`;
-          context.insertVariable(variable, value);
-          return variable;
-        }
+      const argumentName = findKernelValue(argument, kernel.kernelArguments, [], context, uploadedValues);
+      if (argumentName) {
+        return argumentName;
       }
+      const constantName = findKernelValue(argument, kernel.kernelConstants, constants ? Object.keys(constants).map(key => constants[key]) : [], context, uploadedValues);
+      if (constantName) {
+        return constantName;
+      }
+      return null;
     }
   });
   let subKernelsResultVariableSetup = false;
@@ -9823,6 +18062,8 @@ function glKernelString(Kernel, args, originKernel, setupContextString, destroyC
     nativeFunctions,
     subKernels,
     immutable,
+    argumentTypes,
+    constantTypes,
     kernelArguments,
     kernelConstants,
   } = originKernel;
@@ -9842,20 +18083,15 @@ function glKernelString(Kernel, args, originKernel, setupContextString, destroyC
     nativeFunctions,
     subKernels,
     immutable,
+    argumentTypes,
+    constantTypes,
   });
   let result = [];
   context.setIndent(2);
   kernel.build.apply(kernel, args);
   result.push(context.toString());
   context.reset();
-  const upgradedArguments = Array.from(args).map(arg => {
-    switch (typeof arg) {
-      case 'number':
-      case 'boolean':
-        return new arg.constructor(arg);
-    }
-    return arg;
-  });
+
   kernel.kernelArguments.forEach((kernelArgument, i) => {
     switch (kernelArgument.type) {
       // primitives
@@ -9863,15 +18099,14 @@ function glKernelString(Kernel, args, originKernel, setupContextString, destroyC
       case 'Boolean':
       case 'Number':
       case 'Float':
-        context.insertVariable(`uploadValue_${kernelArgument.name}`, upgradedArguments[i]);
-        break;
-
         // non-primitives
       case 'Array':
-        context.insertVariable(`uploadValue_${kernelArgument.name}`, upgradedArguments[i]);
-        break;
+      case 'Array(2)':
+      case 'Array(3)':
+      case 'Array(4)':
       case 'HTMLImage':
-        context.insertVariable(`uploadValue_${kernelArgument.name}`, upgradedArguments[i]);
+      case 'HTMLVideo':
+        context.insertVariable(`uploadValue_${kernelArgument.name}`, kernelArgument.uploadValue);
         break;
       case 'HTMLImageArray':
         for (let imageIndex = 0; imageIndex < args[i].length; imageIndex++) {
@@ -9884,11 +18119,20 @@ function glKernelString(Kernel, args, originKernel, setupContextString, destroyC
         break;
       case 'MemoryOptimizedNumberTexture':
       case 'NumberTexture':
+      case 'Array1D(2)':
+      case 'Array1D(3)':
+      case 'Array1D(4)':
+      case 'Array2D(2)':
+      case 'Array2D(3)':
+      case 'Array2D(4)':
+      case 'Array3D(2)':
+      case 'Array3D(3)':
+      case 'Array3D(4)':
       case 'ArrayTexture(1)':
       case 'ArrayTexture(2)':
       case 'ArrayTexture(3)':
       case 'ArrayTexture(4)':
-        context.insertVariable(`uploadValue_${kernelArgument.name}`, upgradedArguments[i].texture);
+        context.insertVariable(`uploadValue_${kernelArgument.name}`, args[i].texture);
         break;
       default:
         throw new Error(`unhandled kernelArgumentType insertion for glWiretap of type ${kernelArgument.type}`);
@@ -9898,6 +18142,7 @@ function glKernelString(Kernel, args, originKernel, setupContextString, destroyC
   result.push(`function ${toStringWithoutUtils(utils.flattenTo)}`);
   result.push(`function ${toStringWithoutUtils(utils.flatten2dArrayTo)}`);
   result.push(`function ${toStringWithoutUtils(utils.flatten3dArrayTo)}`);
+  result.push(`function ${toStringWithoutUtils(utils.flatten4dArrayTo)}`);
   result.push(`function ${toStringWithoutUtils(utils.isArray)}`);
   if (kernel.renderOutput !== kernel.renderTexture && kernel.formatValues) {
     result.push(
@@ -9907,17 +18152,17 @@ function glKernelString(Kernel, args, originKernel, setupContextString, destroyC
   result.push('/** end of injected functions **/');
   result.push(`  const innerKernel = function (${kernel.kernelArguments.map(kernelArgument => kernelArgument.varName).join(', ')}) {`);
   context.setIndent(4);
-  kernel.run.apply(kernel, upgradedArguments);
+  kernel.run.apply(kernel, args);
   if (kernel.renderKernels) {
     kernel.renderKernels();
   } else if (kernel.renderOutput) {
     kernel.renderOutput();
   }
-  result.push('/** start setup uploads for kernel values **/');
+  result.push('    /** start setup uploads for kernel values **/');
   kernel.kernelArguments.forEach(kernelArgument => {
-    result.push(kernelArgument.getStringValueHandler());
+    result.push('    ' + kernelArgument.getStringValueHandler().split('\n').join('\n    '));
   });
-  result.push('/** end setup uploads for kernel values **/');
+  result.push('    /** end setup uploads for kernel values **/');
   result.push(context.toString());
   if (kernel.renderOutput === kernel.renderTexture) {
     context.reset();
@@ -9949,7 +18194,7 @@ function glKernelString(Kernel, args, originKernel, setupContextString, destroyC
   result.push('  };');
   if (kernel.graphical) {
     result.push(getGetPixelsString(kernel));
-    result.push(`innerKernel.getPixels = getPixels;`);
+    result.push(`  innerKernel.getPixels = getPixels;`);
   }
   result.push('  return innerKernel;');
 
@@ -10027,10 +18272,55 @@ function getToArrayString(kernelResult, textureName) {
   return toArray();
   }`;
 }
+
+/**
+ *
+ * @param {KernelVariable} argument
+ * @param {KernelValue[]} kernelValues
+ * @param {KernelVariable[]} values
+ * @param context
+ * @param {KernelVariable[]} uploadedValues
+ * @return {string|null}
+ */
+function findKernelValue(argument, kernelValues, values, context, uploadedValues) {
+  if (argument === null) return null;
+  switch (typeof argument) {
+    case 'boolean':
+    case 'number':
+      return null;
+  }
+  if (
+    typeof HTMLImageElement !== 'undefined' &&
+    argument instanceof HTMLImageElement
+  ) {
+    for (let i = 0; i < kernelValues.length; i++) {
+      const kernelValue = kernelValues[i];
+      if (kernelValue.type !== 'HTMLImageArray') continue;
+      if (kernelValue.uploadValue !== argument) continue;
+      // TODO: if we send two of the same image, the parser could get confused, and short circuit to the first, handle that here
+      const variableIndex = values[i].indexOf(argument);
+      if (variableIndex === -1) continue;
+      const variableName = `uploadValue_${kernelValue.name}[${variableIndex}]`;
+      context.insertVariable(variableName, argument);
+      return variableName;
+    }
+    return null;
+  }
+
+  for (let i = 0; i < kernelValues.length; i++) {
+    const kernelValue = kernelValues[i];
+    if (argument !== kernelValue.uploadValue) continue;
+    const variable = `uploadValue_${kernelValue.name}`;
+    context.insertVariable(variable, kernelValue);
+    return variable;
+  }
+  return null;
+}
+
 module.exports = {
   glKernelString
 };
-},{"../../utils":89,"gl-wiretap":1}],13:[function(require,module,exports){
+},{"../../utils":150,"gl-wiretap":7}],52:[function(require,module,exports){
 const { Kernel } = require('../kernel');
 const { Texture } = require('../../texture');
 const { utils } = require('../../utils');
@@ -10073,7 +18363,8 @@ class GLKernel extends Kernel {
       validate: false,
       output: [1],
       precision: 'single',
-      returnType: 'Number'
+      returnType: 'Number',
+      tactic: 'speed',
     });
     kernel.build();
     kernel.run();
@@ -10093,6 +18384,7 @@ class GLKernel extends Kernel {
       output: [2],
       returnType: 'Number',
       precision: 'unsigned',
+      tactic: 'speed',
     });
     const args = [
       [6, 6030401],
@@ -10332,6 +18624,13 @@ class GLKernel extends Kernel {
     this.renderStrategy = null;
     this.compiledFragmentShader = null;
     this.compiledVertexShader = null;
+  }
+
+  checkTextureSize() {
+    const { features } = this.constructor;
+    if (this.texSize[0] > features.maxTextureSize || this.texSize[1] > features.maxTextureSize) {
+      throw new Error(`Texture size [${this.texSize[0]},${this.texSize[1]}] generated by kernel is larger than supported size [${features.maxTextureSize},${features.maxTextureSize}]`);
+    }
   }
 
   translateSource() {
@@ -10794,6 +19093,66 @@ class GLKernel extends Kernel {
       utils.linesToString(this.getMainResultSubKernelArray4Texture());
   }
 
+  /**
+   *
+   * @return {string}
+   */
+  getFloatTacticDeclaration() {
+    switch (this.tactic) {
+      case 'speed':
+        return 'precision lowp float;\n';
+      case 'performance':
+        return 'precision highp float;\n';
+      case 'balanced':
+      default:
+        return 'precision mediump float;\n';
+    }
+  }
+
+  /**
+   *
+   * @return {string}
+   */
+  getIntTacticDeclaration() {
+    switch (this.tactic) {
+      case 'speed':
+        return 'precision lowp int;\n';
+      case 'performance':
+        return 'precision highp int;\n';
+      case 'balanced':
+      default:
+        return 'precision mediump int;\n';
+    }
+  }
+
+  /**
+   *
+   * @return {string}
+   */
+  getSampler2DTacticDeclaration() {
+    switch (this.tactic) {
+      case 'speed':
+        return 'precision lowp sampler2D;\n';
+      case 'performance':
+        return 'precision highp sampler2D;\n';
+      case 'balanced':
+      default:
+        return 'precision mediump sampler2D;\n';
+    }
+  }
+
+  getSampler2DArrayTacticDeclaration() {
+    switch (this.tactic) {
+      case 'speed':
+        return 'precision lowp sampler2DArray;\n';
+      case 'performance':
+        return 'precision highp sampler2DArray;\n';
+      case 'balanced':
+      default:
+        return 'precision mediump sampler2DArray;\n';
+    }
+  }
+
   renderTexture() {
     return new this.TextureConstructor({
       texture: this.outputTexture,
@@ -10963,7 +19322,7 @@ module.exports = {
   GLKernel,
   renderStrategy
 };
-},{"../../texture":88,"../../utils":89,"../kernel":35,"./texture/array-2-float":16,"./texture/array-2-float-2d":14,"./texture/array-2-float-3d":15,"./texture/array-3-float":19,"./texture/array-3-float-2d":17,"./texture/array-3-float-3d":18,"./texture/array-4-float":22,"./texture/array-4-float-2d":20,"./texture/array-4-float-3d":21,"./texture/float":25,"./texture/float-2d":23,"./texture/float-3d":24,"./texture/graphical":26,"./texture/memory-optimized":29,"./texture/memory-optimized-2d":27,"./texture/memory-optimized-3d":28,"./texture/unsigned":32,"./texture/unsigned-2d":30,"./texture/unsigned-3d":31}],14:[function(require,module,exports){
+},{"../../texture":149,"../../utils":150,"../kernel":74,"./texture/array-2-float":55,"./texture/array-2-float-2d":53,"./texture/array-2-float-3d":54,"./texture/array-3-float":58,"./texture/array-3-float-2d":56,"./texture/array-3-float-3d":57,"./texture/array-4-float":61,"./texture/array-4-float-2d":59,"./texture/array-4-float-3d":60,"./texture/float":64,"./texture/float-2d":62,"./texture/float-3d":63,"./texture/graphical":65,"./texture/memory-optimized":68,"./texture/memory-optimized-2d":66,"./texture/memory-optimized-3d":67,"./texture/unsigned":71,"./texture/unsigned-2d":69,"./texture/unsigned-3d":70}],53:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -10980,7 +19339,7 @@ class GLTextureArray2Float2D extends GLTextureFloat {
 module.exports = {
   GLTextureArray2Float2D
 };
-},{"../../../utils":89,"./float":25}],15:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],54:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -10997,7 +19356,7 @@ class GLTextureArray2Float3D extends GLTextureFloat {
 module.exports = {
   GLTextureArray2Float3D
 };
-},{"../../../utils":89,"./float":25}],16:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],55:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11014,7 +19373,7 @@ class GLTextureArray2Float extends GLTextureFloat {
 module.exports = {
   GLTextureArray2Float
 };
-},{"../../../utils":89,"./float":25}],17:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],56:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11031,7 +19390,7 @@ class GLTextureArray3Float2D extends GLTextureFloat {
 module.exports = {
   GLTextureArray3Float2D
 };
-},{"../../../utils":89,"./float":25}],18:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],57:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11048,7 +19407,7 @@ class GLTextureArray3Float3D extends GLTextureFloat {
 module.exports = {
   GLTextureArray3Float3D
 };
-},{"../../../utils":89,"./float":25}],19:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],58:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11065,7 +19424,7 @@ class GLTextureArray3Float extends GLTextureFloat {
 module.exports = {
   GLTextureArray3Float
 };
-},{"../../../utils":89,"./float":25}],20:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],59:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11082,7 +19441,7 @@ class GLTextureArray4Float2D extends GLTextureFloat {
 module.exports = {
   GLTextureArray4Float2D
 };
-},{"../../../utils":89,"./float":25}],21:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],60:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11099,7 +19458,7 @@ class GLTextureArray4Float3D extends GLTextureFloat {
 module.exports = {
   GLTextureArray4Float3D
 };
-},{"../../../utils":89,"./float":25}],22:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],61:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11116,7 +19475,7 @@ class GLTextureArray4Float extends GLTextureFloat {
 module.exports = {
   GLTextureArray4Float
 };
-},{"../../../utils":89,"./float":25}],23:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],62:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11133,7 +19492,7 @@ class GLTextureFloat2D extends GLTextureFloat {
 module.exports = {
   GLTextureFloat2D
 };
-},{"../../../utils":89,"./float":25}],24:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],63:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11150,7 +19509,7 @@ class GLTextureFloat3D extends GLTextureFloat {
 module.exports = {
   GLTextureFloat3D
 };
-},{"../../../utils":89,"./float":25}],25:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],64:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { Texture } = require('../../../texture');
 
@@ -11185,7 +19544,7 @@ class GLTextureFloat extends Texture {
 module.exports = {
   GLTextureFloat
 };
-},{"../../../texture":88,"../../../utils":89}],26:[function(require,module,exports){
+},{"../../../texture":149,"../../../utils":150}],65:[function(require,module,exports){
 const { GLTextureUnsigned } = require('./unsigned');
 
 class GLTextureGraphical extends GLTextureUnsigned {
@@ -11201,7 +19560,7 @@ class GLTextureGraphical extends GLTextureUnsigned {
 module.exports = {
   GLTextureGraphical
 };
-},{"./unsigned":32}],27:[function(require,module,exports){
+},{"./unsigned":71}],66:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11218,7 +19577,7 @@ class GLTextureMemoryOptimized2D extends GLTextureFloat {
 module.exports = {
   GLTextureMemoryOptimized2D
 };
-},{"../../../utils":89,"./float":25}],28:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],67:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11235,7 +19594,7 @@ class GLTextureMemoryOptimized3D extends GLTextureFloat {
 module.exports = {
   GLTextureMemoryOptimized3D
 };
-},{"../../../utils":89,"./float":25}],29:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],68:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureFloat } = require('./float');
 
@@ -11252,7 +19611,7 @@ class GLTextureMemoryOptimized extends GLTextureFloat {
 module.exports = {
   GLTextureMemoryOptimized
 };
-},{"../../../utils":89,"./float":25}],30:[function(require,module,exports){
+},{"../../../utils":150,"./float":64}],69:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureUnsigned } = require('./unsigned');
 
@@ -11269,7 +19628,7 @@ class GLTextureUnsigned2D extends GLTextureUnsigned {
 module.exports = {
   GLTextureUnsigned2D
 };
-},{"../../../utils":89,"./unsigned":32}],31:[function(require,module,exports){
+},{"../../../utils":150,"./unsigned":71}],70:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { GLTextureUnsigned } = require('./unsigned');
 
@@ -11286,7 +19645,7 @@ class GLTextureUnsigned3D extends GLTextureUnsigned {
 module.exports = {
   GLTextureUnsigned3D
 };
-},{"../../../utils":89,"./unsigned":32}],32:[function(require,module,exports){
+},{"../../../utils":150,"./unsigned":71}],71:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { Texture } = require('../../../texture');
 
@@ -11321,7 +19680,7 @@ class GLTextureUnsigned extends Texture {
 module.exports = {
   GLTextureUnsigned
 };
-},{"../../../texture":88,"../../../utils":89}],33:[function(require,module,exports){
+},{"../../../texture":149,"../../../utils":150}],72:[function(require,module,exports){
 const getContext = require('gl');
 const { WebGLKernel } = require('../web-gl/kernel');
 const { glKernelString } = require('../gl/kernel-string');
@@ -11380,6 +19739,7 @@ class HeadlessGLKernel extends WebGLKernel {
       isDrawBuffers,
       kernelMap: isDrawBuffers,
       channelCount: this.getChannelCount(),
+      maxTextureSize: this.getMaxTextureSize(),
     });
   }
 
@@ -11395,6 +19755,10 @@ class HeadlessGLKernel extends WebGLKernel {
     return testExtensions.WEBGL_draw_buffers ?
       testContext.getParameter(testExtensions.WEBGL_draw_buffers.MAX_DRAW_BUFFERS_WEBGL) :
       1;
+  }
+
+  static getMaxTextureSize() {
+    return testContext.getParameter(testContext.MAX_TEXTURE_SIZE);
   }
 
   static get testCanvas() {
@@ -11433,7 +19797,9 @@ class HeadlessGLKernel extends WebGLKernel {
 
   build() {
     super.build.apply(this, arguments);
-    this.extensions.STACKGL_resize_drawingbuffer.resize(this.maxTexSize[0], this.maxTexSize[1]);
+    if (!this.fallbackRequested) {
+      this.extensions.STACKGL_resize_drawingbuffer.resize(this.maxTexSize[0], this.maxTexSize[1]);
+    }
   }
 
   destroyExtensions() {
@@ -11457,7 +19823,7 @@ class HeadlessGLKernel extends WebGLKernel {
    */
   toString() {
     const setupContextString = `const gl = context || require('gl')(1, 1);\n`;
-    const destroyContextString = `if (!context) { gl.getExtension('STACKGL_destroy_context').destroy(); }\n`;
+    const destroyContextString = `    if (!context) { gl.getExtension('STACKGL_destroy_context').destroy(); }\n`;
     return glKernelString(this.constructor, arguments, this, setupContextString, destroyContextString);
   }
 
@@ -11472,16 +19838,14 @@ class HeadlessGLKernel extends WebGLKernel {
 module.exports = {
   HeadlessGLKernel
 };
-},{"../gl/kernel-string":12,"../web-gl/kernel":57,"gl":2}],34:[function(require,module,exports){
-const { utils } = require('../utils');
-
+},{"../gl/kernel-string":51,"../web-gl/kernel":107,"gl":8}],73:[function(require,module,exports){
 /**
  * @class KernelValue
  */
 class KernelValue {
   /**
-   *
-   * @param {IKernelArgumentSettings} settings
+   * @param {KernelVariable} value
+   * @param {IKernelValueSettings} settings
    */
   constructor(value, settings) {
     const {
@@ -11493,12 +19857,20 @@ class KernelValue {
       onUpdateValueMismatch,
       origin,
       strictIntegers,
+      type,
+      tactic,
     } = settings;
     if (!name) {
       throw new Error('name not set');
     }
+    if (!type) {
+      throw new Error('type not set');
+    }
     if (!origin) {
       throw new Error('origin not set');
+    }
+    if (!tactic) {
+      throw new Error('tactic not set');
     }
     if (origin !== 'user' && origin !== 'constants') {
       throw new Error(`origin must be "user" or "constants" value is "${ origin }"`);
@@ -11508,11 +19880,13 @@ class KernelValue {
     }
     this.name = name;
     this.origin = origin;
+    this.tactic = tactic;
     this.id = `${this.origin}_${name}`;
     this.varName = origin === 'constants' ? `constants.${name}` : name;
     this.kernel = kernel;
     this.strictIntegers = strictIntegers;
-    this.type = utils.getVariableType(value, strictIntegers);
+    // handle textures
+    this.type = value.type || type;
     this.size = value.size || null;
     this.index = null;
     this.context = context;
@@ -11534,7 +19908,7 @@ class KernelValue {
 module.exports = {
   KernelValue
 };
-},{"../utils":89}],35:[function(require,module,exports){
+},{}],74:[function(require,module,exports){
 const { utils } = require('../utils');
 const { Input } = require('../input');
 
@@ -11645,7 +20019,7 @@ class Kernel {
     this.constantTypes = null;
     this.constantBitRatios = null;
     this.dynamicArguments = false;
-    this.dynamicOutput = true;
+    this.dynamicOutput = false;
 
     /**
      *
@@ -11685,6 +20059,12 @@ class Kernel {
 
     /**
      *
+     * @type {String}
+     */
+    this.injectedNative = null;
+
+    /**
+     *
      * @type {ISubKernel[]}
      */
     this.subKernels = null;
@@ -11713,6 +20093,13 @@ class Kernel {
      * @enum 'single' | 'unsigned'
      */
     this.precision = null;
+
+    /**
+     *
+     * @type {String|null}
+     * @enum 'speed' | 'balanced' | 'precision'
+     */
+    this.tactic = 'balanced';
 
     this.plugins = null;
 
@@ -11806,14 +20193,24 @@ class Kernel {
    * @param {IArguments} args - The actual parameters sent to the Kernel
    */
   setupArguments(args) {
+    this.kernelArguments = [];
     if (!this.argumentTypes) {
-      this.kernelArguments = [];
       if (!this.argumentTypes) {
         this.argumentTypes = [];
         for (let i = 0; i < args.length; i++) {
           const argType = utils.getVariableType(args[i], this.strictIntegers);
-          this.argumentTypes.push(argType === 'Integer' ? 'Number' : argType);
+          const type = argType === 'Integer' ? 'Number' : argType;
+          this.argumentTypes.push(type);
+          this.kernelArguments.push({
+            type
+          });
         }
+      }
+    } else {
+      for (let i = 0; i < this.argumentTypes.length; i++) {
+        this.kernelArguments.push({
+          type: this.argumentTypes[i]
+        });
       }
     }
 
@@ -11837,12 +20234,27 @@ class Kernel {
    */
   setupConstants() {
     this.kernelConstants = [];
-    this.constantTypes = {};
+    let needsConstantTypes = this.constantTypes === null;
+    if (needsConstantTypes) {
+      this.constantTypes = {};
+    }
     this.constantBitRatios = {};
     if (this.constants) {
-      for (let p in this.constants) {
-        this.constantTypes[p] = utils.getVariableType(this.constants[p], this.strictIntegers);
-        this.constantBitRatios[p] = this.getBitRatio(this.constants[p]);
+      for (let name in this.constants) {
+        if (needsConstantTypes) {
+          const type = utils.getVariableType(this.constants[name], this.strictIntegers);
+          this.constantTypes[name] = type;
+          this.kernelConstants.push({
+            name,
+            type
+          });
+        } else {
+          this.kernelConstants.push({
+            name,
+            type: this.constantTypes[name]
+          });
+        }
+        this.constantBitRatios[name] = this.getBitRatio(this.constants[name]);
       }
     }
   }
@@ -11850,7 +20262,7 @@ class Kernel {
   /**
    *
    * @param flag
-   * @returns {Kernel}
+   * @return {Kernel}
    */
   setOptimizeFloatMemory(flag) {
     this.optimizeFloatMemory = flag;
@@ -11900,6 +20312,7 @@ class Kernel {
   /**
    * @desc Set the maximum number of loop iterations
    * @param {number} max - iterations count
+   *
    */
   setLoopMaxIterations(max) {
     this.loopMaxIterations = max;
@@ -11916,8 +20329,18 @@ class Kernel {
 
   /**
    *
+   * @param [IKernelValueTypes] constantTypes
+   * @return {Kernel}
+   */
+  setConstantTypes(constantTypes) {
+    this.constantTypes = constantTypes;
+    return this;
+  }
+
+  /**
+   *
    * @param {IFunction[]|KernelFunction[]} functions
-   * @returns {Kernel}
+   * @return {Kernel}
    */
   setFunctions(functions) {
     if (typeof functions[0] === 'function') {
@@ -11929,9 +20352,29 @@ class Kernel {
   }
 
   /**
+   *
+   * @param {IGPUNativeFunction} nativeFunctions
+   * @return {Kernel}
+   */
+  setNativeFunctions(nativeFunctions) {
+    this.nativeFunctions = nativeFunctions;
+    return this;
+  }
+
+  /**
+   *
+   * @param {String} injectedNative
+   * @return {Kernel}
+   */
+  setInjectedNative(injectedNative) {
+    this.injectedNative = injectedNative;
+    return this;
+  }
+
+  /**
    * Set writing to texture on/off
    * @param flag
-   * @returns {Kernel}
+   * @return {Kernel}
    */
   setPipeline(flag) {
     this.pipeline = flag;
@@ -11941,7 +20384,7 @@ class Kernel {
   /**
    * Set precision to 'unsigned' or 'single'
    * @param {String} flag 'unsigned' or 'single'
-   * @returns {Kernel}
+   * @return {Kernel}
    */
   setPrecision(flag) {
     this.precision = flag;
@@ -11950,7 +20393,7 @@ class Kernel {
 
   /**
    * @param flag
-   * @returns {Kernel}
+   * @return {Kernel}
    * @deprecated
    */
   setOutputToTexture(flag) {
@@ -11962,7 +20405,7 @@ class Kernel {
   /**
    * Set to immutable
    * @param flag
-   * @returns {Kernel}
+   * @return {Kernel}
    */
   setImmutable(flag) {
     this.immutable = flag;
@@ -12065,8 +20508,32 @@ class Kernel {
     return this;
   }
 
+  /**
+   *
+   * @param [IKernelValueTypes|GPUVariableType[]] argumentTypes
+   * @return {Kernel}
+   */
   setArgumentTypes(argumentTypes) {
-    this.argumentTypes = argumentTypes;
+    if (Array.isArray(argumentTypes)) {
+      this.argumentTypes = argumentTypes;
+    } else {
+      this.argumentTypes = [];
+      for (const p in argumentTypes) {
+        const argumentIndex = this.argumentNames.indexOf(p);
+        if (argumentIndex === -1) throw new Error(`unable to find argument ${ p }`);
+        this.argumentTypes[argumentIndex] = argumentTypes[p];
+      }
+    }
+    return this;
+  }
+
+  /**
+   *
+   * @param [Tactic] tactic
+   * @return {Kernel}
+   */
+  setTactic(tactic) {
+    this.tactic = tactic;
     return this;
   }
 
@@ -12177,11 +20644,12 @@ class Kernel {
 module.exports = {
   Kernel
 };
-},{"../input":85,"../utils":89}],36:[function(require,module,exports){
+},{"../input":146,"../utils":150}],75:[function(require,module,exports){
+// language=GLSL
 const fragmentShader = `__HEADER__;
-precision highp float;
-precision highp int;
-precision highp sampler2D;
+__FLOAT_TACTIC_DECLARATION__;
+__INT_TACTIC_DECLARATION__;
+__SAMPLER_2D_TACTIC_DECLARATION__;
 
 const int LOOP_MAX = __LOOP_MAX__;
 
@@ -12447,8 +20915,7 @@ ivec3 indexTo3D(int idx, ivec3 texDim) {
 }
 
 float get32(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + texDim.x * (xyz.y + texDim.y * xyz.z);
+  int index = x + texDim.x * (y + texDim.y * z);
   int w = texSize.x;
   vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
   vec4 texel = texture2D(tex, st / vec2(texSize));
@@ -12456,8 +20923,7 @@ float get32(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
 }
 
 float get16(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + texDim.x * (xyz.y + texDim.y * xyz.z);
+  int index = x + texDim.x * (y + texDim.y * z);
   int w = texSize.x * 2;
   vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
   vec4 texel = texture2D(tex, st / vec2(texSize.x * 2, texSize.y));
@@ -12465,8 +20931,7 @@ float get16(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
 }
 
 float get8(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + texDim.x * (xyz.y + texDim.y * xyz.z);
+  int index = x + texDim.x * (y + texDim.y * z);
   int w = texSize.x * 4;
   vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
   vec4 texel = texture2D(tex, st / vec2(texSize.x * 4, texSize.y));
@@ -12474,8 +20939,7 @@ float get8(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
 }
 
 float getMemoryOptimized32(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + texDim.x * (xyz.y + texDim.y * xyz.z);
+  int index = x + texDim.x * (y + texDim.y * z);
   int channel = integerMod(index, 4);
   index = index / 4;
   int w = texSize.x;
@@ -12489,8 +20953,7 @@ float getMemoryOptimized32(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, in
 }
 
 vec4 getImage2D(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + texDim.x * (xyz.y + texDim.y * xyz.z);
+  int index = x + texDim.x * (y + texDim.y * z);
   int w = texSize.x;
   vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
   return texture2D(tex, st / vec2(texSize));
@@ -12506,13 +20969,61 @@ vec2 getVec2FromSampler2D(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int
   return vec2(result[0], result[1]);
 }
 
+vec2 getMemoryOptimizedVec2(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
+  int index = x + (texDim.x * (y + (texDim.y * z)));
+  int channel = integerMod(index, 2);
+  index = index / 2;
+  int w = texSize.x;
+  vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
+  vec4 texel = texture2D(tex, st / vec2(texSize));
+  if (channel == 0) return vec2(texel.r, texel.g);
+  if (channel == 1) return vec2(texel.b, texel.a);
+  return vec2(0.0, 0.0);
+}
+
 vec3 getVec3FromSampler2D(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
   vec4 result = getImage2D(tex, texSize, texDim, z, y, x);
   return vec3(result[0], result[1], result[2]);
 }
 
+vec3 getMemoryOptimizedVec3(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
+  int fieldIndex = 3 * (x + texDim.x * (y + texDim.y * z));
+  int vectorIndex = fieldIndex / 4;
+  int vectorOffset = fieldIndex - vectorIndex * 4;
+  int readY = vectorIndex / texSize.x;
+  int readX = vectorIndex - readY * texSize.x;
+  vec4 tex1 = texture2D(tex, (vec2(readX, readY) + 0.5) / vec2(texSize));
+  
+  if (vectorOffset == 0) {
+    return tex1.xyz;
+  } else if (vectorOffset == 1) {
+    return tex1.yzw;
+  } else {
+    readX++;
+    if (readX >= texSize.x) {
+      readX = 0;
+      readY++;
+    }
+    vec4 tex2 = texture2D(tex, vec2(readX, readY) / vec2(texSize));
+    if (vectorOffset == 2) {
+      return vec3(tex1.z, tex1.w, tex2.x);
+    } else {
+      return vec3(tex1.w, tex2.x, tex2.y);
+    }
+  }
+}
+
 vec4 getVec4FromSampler2D(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
   return getImage2D(tex, texSize, texDim, z, y, x);
+}
+
+vec4 getMemoryOptimizedVec4(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
+  int index = x + texDim.x * (y + texDim.y * z);
+  int channel = integerMod(index, 2);
+  int w = texSize.x;
+  vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
+  vec4 texel = texture2D(tex, st / vec2(texSize));
+  return vec4(texel.r, texel.g, texel.b, texel.a);
 }
 
 vec4 actualColor;
@@ -12528,6 +21039,7 @@ void color(sampler2D image) {
   actualColor = texture2D(image, vTexCoord);
 }
 
+__INJECTED_NATIVE__;
 __MAIN_CONSTANTS__;
 __MAIN_ARGUMENTS__;
 __KERNEL__;
@@ -12540,7 +21052,7 @@ void main(void) {
 module.exports = {
   fragmentShader
 };
-},{}],37:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 const { utils } = require('../../utils');
 const { FunctionNode } = require('../function-node');
 // Closure capture for the ast function, prevent collision with existing AST functions
@@ -12619,10 +21131,13 @@ class WebGLFunctionNode extends FunctionNode {
         if (!type) {
           throw this.astErrorOutput('Unexpected expression', ast);
         }
-        retArr.push(type);
-        retArr.push(' ');
-        retArr.push('user_');
-        retArr.push(argumentName);
+
+        if (type === 'sampler2D' || type === 'sampler2DArray') {
+          // mash needed arguments together, since now we have end to end inference
+          retArr.push(`${type} user_${argumentName},ivec2 user_${argumentName}Size,ivec3 user_${argumentName}Dim`);
+        } else {
+          retArr.push(`${type} user_${argumentName}`);
+        }
       }
     }
 
@@ -12648,7 +21163,9 @@ class WebGLFunctionNode extends FunctionNode {
    */
   astReturnStatement(ast, retArr) {
     if (!ast.argument) throw this.astErrorOutput('Unexpected return statement', ast);
+    this.pushState('skip-literal-correction');
     const type = this.getType(ast.argument);
+    this.popState('skip-literal-correction');
 
     const result = [];
 
@@ -12736,22 +21253,23 @@ class WebGLFunctionNode extends FunctionNode {
       );
     }
 
+    const key = `${ast.start},${ast.end}`;
     if (Number.isInteger(ast.value)) {
-      if (this.isState('in-for-loop-init') || this.isState('casting-to-integer')) {
-        this.literalTypes[`${ast.start},${ast.end}`] = 'Integer';
+      if (this.isState('in-for-loop-init') || this.isState('casting-to-integer') || this.isState('building-integer')) {
+        this.literalTypes[key] = 'Integer';
         retArr.push(`${ast.value}`);
-      } else if (this.isState('casting-to-float')) {
-        this.literalTypes[`${ast.start},${ast.end}`] = 'Number';
+      } else if (this.isState('casting-to-float') || this.isState('building-float')) {
+        this.literalTypes[key] = 'Number';
         retArr.push(`${ast.value}.0`);
       } else {
-        this.literalTypes[`${ast.start},${ast.end}`] = 'Number';
+        this.literalTypes[key] = 'Number';
         retArr.push(`${ast.value}.0`);
       }
-    } else if (this.isState('casting-to-integer')) {
-      this.literalTypes[`${ast.start},${ast.end}`] = 'Integer';
-      retArr.push(parseInt(ast.raw));
+    } else if (this.isState('casting-to-integer') || this.isState('building-integer')) {
+      this.literalTypes[key] = 'Integer';
+      retArr.push(Math.round(ast.value));
     } else {
-      this.literalTypes[`${ast.start},${ast.end}`] = 'Number';
+      this.literalTypes[key] = 'Number';
       retArr.push(`${ast.value}`);
     }
     return retArr;
@@ -12770,6 +21288,7 @@ class WebGLFunctionNode extends FunctionNode {
 
     if (this.fixIntegerDivisionAccuracy && ast.operator === '/') {
       retArr.push('div_with_int_check(');
+      this.pushState('building-float');
       switch (this.getType(ast.left)) {
         case 'Integer':
           this.castValueToFloat(ast.left, retArr);
@@ -12791,6 +21310,7 @@ class WebGLFunctionNode extends FunctionNode {
         default:
           this.astGeneric(ast.right, retArr);
       }
+      this.popState('building-float');
       retArr.push(')');
       return retArr;
     }
@@ -12804,27 +21324,35 @@ class WebGLFunctionNode extends FunctionNode {
     const key = leftType + ' & ' + rightType;
     switch (key) {
       case 'Integer & Integer':
+        this.pushState('building-integer');
         this.astGeneric(ast.left, retArr);
         retArr.push(operatorMap[ast.operator] || ast.operator);
         this.astGeneric(ast.right, retArr);
+        this.popState('building-integer');
         break;
       case 'Number & Float':
       case 'Float & Number':
       case 'Float & Float':
       case 'Number & Number':
+        this.pushState('building-float');
         this.astGeneric(ast.left, retArr);
         retArr.push(operatorMap[ast.operator] || ast.operator);
         this.astGeneric(ast.right, retArr);
+        this.popState('building-float');
         break;
       case 'LiteralInteger & LiteralInteger':
-        if (this.isState('casting-to-integer')) {
+        if (this.isState('casting-to-integer') || this.isState('building-integer')) {
+          this.pushState('building-integer');
           this.astGeneric(ast.left, retArr);
           retArr.push(operatorMap[ast.operator] || ast.operator);
           this.astGeneric(ast.right, retArr);
+          this.popState('building-integer');
         } else {
+          this.pushState('building-float');
           this.castLiteralToFloat(ast.left, retArr);
           retArr.push(operatorMap[ast.operator] || ast.operator);
           this.castLiteralToFloat(ast.right, retArr);
+          this.popState('building-float');
         }
         break;
 
@@ -12833,12 +21361,15 @@ class WebGLFunctionNode extends FunctionNode {
         if (ast.operator === '>' || ast.operator === '<' && ast.right.type === 'Literal') {
           // if right value is actually a float, don't loose that information, cast left to right rather than the usual right to left
           if (!Number.isInteger(ast.right.value)) {
+            this.pushState('building-float');
             this.castValueToFloat(ast.left, retArr);
             retArr.push(operatorMap[ast.operator] || ast.operator);
             this.astGeneric(ast.right, retArr);
+            this.popState('building-float');
             break;
           }
         }
+        this.pushState('building-integer');
         this.astGeneric(ast.left, retArr);
         retArr.push(operatorMap[ast.operator] || ast.operator);
         this.pushState('casting-to-integer');
@@ -12857,62 +21388,81 @@ class WebGLFunctionNode extends FunctionNode {
           retArr.push(')');
         }
         this.popState('casting-to-integer');
+        this.popState('building-integer');
         break;
       case 'Integer & LiteralInteger':
+        this.pushState('building-integer');
         this.astGeneric(ast.left, retArr);
         retArr.push(operatorMap[ast.operator] || ast.operator);
         this.castLiteralToInteger(ast.right, retArr);
+        this.popState('building-integer');
         break;
 
       case 'Number & Integer':
+        this.pushState('building-float');
         this.astGeneric(ast.left, retArr);
         retArr.push(operatorMap[ast.operator] || ast.operator);
         this.castValueToFloat(ast.right, retArr);
+        this.popState('building-float');
         break;
       case 'Float & LiteralInteger':
       case 'Number & LiteralInteger':
         if (this.isState('in-for-loop-test')) {
+          this.pushState('building-integer');
           retArr.push('int(');
           this.astGeneric(ast.left, retArr);
           retArr.push(')');
           retArr.push(operatorMap[ast.operator] || ast.operator);
           this.castLiteralToInteger(ast.right, retArr);
+          this.popState('building-integer');
         } else {
+          this.pushState('building-float');
           this.astGeneric(ast.left, retArr);
           retArr.push(operatorMap[ast.operator] || ast.operator);
           this.castLiteralToFloat(ast.right, retArr);
+          this.popState('building-float');
         }
         break;
       case 'LiteralInteger & Float':
       case 'LiteralInteger & Number':
         if (this.isState('in-for-loop-test') || this.isState('in-for-loop-init') || this.isState('casting-to-integer')) {
+          this.pushState('building-integer');
           this.castLiteralToInteger(ast.left, retArr);
           retArr.push(operatorMap[ast.operator] || ast.operator);
           this.castValueToInteger(ast.right, retArr);
+          this.popState('building-integer');
         } else {
+          this.pushState('building-float');
           this.astGeneric(ast.left, retArr);
           retArr.push(operatorMap[ast.operator] || ast.operator);
           this.pushState('casting-to-float');
           this.astGeneric(ast.right, retArr);
           this.popState('casting-to-float');
+          this.popState('building-float');
         }
         break;
       case 'LiteralInteger & Integer':
+        this.pushState('building-integer');
         this.castLiteralToInteger(ast.left, retArr);
         retArr.push(operatorMap[ast.operator] || ast.operator);
         this.astGeneric(ast.right, retArr);
+        this.popState('building-integer');
         break;
 
       case 'Boolean & Boolean':
+        this.pushState('building-boolean');
         this.astGeneric(ast.left, retArr);
         retArr.push(operatorMap[ast.operator] || ast.operator);
         this.astGeneric(ast.right, retArr);
+        this.popState('building-boolean');
         break;
 
       case 'Float & Integer':
+        this.pushState('building-float');
         this.astGeneric(ast.left, retArr);
         retArr.push(operatorMap[ast.operator] || ast.operator);
         this.castValueToFloat(ast.right, retArr);
+        this.popState('building-float');
         break;
 
       default:
@@ -13105,12 +21655,7 @@ class WebGLFunctionNode extends FunctionNode {
         retArr.push(`user_${idtNode.name}`);
       }
     } else {
-      const userArgumentName = this.getKernelArgumentName(idtNode.name);
-      if (userArgumentName) {
-        retArr.push(`user_${userArgumentName}`);
-      } else {
-        retArr.push(`user_${idtNode.name}`);
-      }
+      retArr.push(`user_${idtNode.name}`);
     }
 
     return retArr;
@@ -13253,7 +21798,7 @@ class WebGLFunctionNode extends FunctionNode {
   astAssignmentExpression(assNode, retArr) {
     const declaration = this.getDeclaration(assNode.left);
     if (declaration && !declaration.assignable) {
-      throw new this.astErrorOutput(`Variable ${assNode.left.name} is not assignable here`, assNode);
+      throw this.astErrorOutput(`Variable ${assNode.left.name} is not assignable here`, assNode);
     }
     // TODO: casting needs implemented here
     if (assNode.operator === '%=') {
@@ -13374,9 +21919,13 @@ class WebGLFunctionNode extends FunctionNode {
         lastType = type;
         declarationResult.push(`user_${declaration.id.name}=`);
         if (actualType === 'Number' && type === 'Integer') {
-          declarationResult.push('int(');
-          this.astGeneric(init, declarationResult);
-          declarationResult.push(')');
+          if (init.left && init.left.type === 'Literal') {
+            this.astGeneric(init, declarationResult);
+          } else {
+            declarationResult.push('int(');
+            this.astGeneric(init, declarationResult);
+            declarationResult.push(')');
+          }
         } else {
           this.astGeneric(init, declarationResult);
         }
@@ -13636,25 +22185,34 @@ class WebGLFunctionNode extends FunctionNode {
         }
         break;
       case 'this.constants.value':
-      case 'this.constants.value[]':
-      case 'this.constants.value[][]':
-      case 'this.constants.value[][][]':
-      case 'this.constants.value[][][][]':
-        break;
-      case 'fn()[]':
-        this.astCallExpression(mNode.object, retArr);
-        retArr.push('[');
-        retArr.push(this.memberExpressionPropertyMarkup(property));
-        retArr.push(']');
-        return retArr;
-      case '[][]':
-        this.astArrayExpression(mNode.object, retArr);
-        retArr.push('[');
-        retArr.push(this.memberExpressionPropertyMarkup(property));
-        retArr.push(']');
-        return retArr;
-      default:
-        throw this.astErrorOutput('Unexpected expression', mNode);
+        if (typeof xProperty === 'undefined') {
+          switch (type) {
+            case 'Array(2)':
+            case 'Array(3)':
+            case 'Array(4)':
+              retArr.push(`constants_${ name }`);
+              return retArr;
+          }
+        }
+        case 'this.constants.value[]':
+        case 'this.constants.value[][]':
+        case 'this.constants.value[][][]':
+        case 'this.constants.value[][][][]':
+          break;
+        case 'fn()[]':
+          this.astCallExpression(mNode.object, retArr);
+          retArr.push('[');
+          retArr.push(this.memberExpressionPropertyMarkup(property));
+          retArr.push(']');
+          return retArr;
+        case '[][]':
+          this.astArrayExpression(mNode.object, retArr);
+          retArr.push('[');
+          retArr.push(this.memberExpressionPropertyMarkup(property));
+          retArr.push(']');
+          return retArr;
+        default:
+          throw this.astErrorOutput('Unexpected expression', mNode);
     }
 
     if (mNode.computed === false) {
@@ -13671,9 +22229,7 @@ class WebGLFunctionNode extends FunctionNode {
 
     // handle more complex types
     // argument may have come from a parent
-    let synonymName = this.getKernelArgumentName(name);
-
-    const markupName = `${origin}_${synonymName || name}`;
+    const markupName = `${origin}_${name}`;
 
     switch (type) {
       case 'Array(2)':
@@ -13695,8 +22251,22 @@ class WebGLFunctionNode extends FunctionNode {
         this.memberExpressionXYZ(xProperty, yProperty, zProperty, retArr);
         retArr.push(')');
         break;
+      case 'Array1D(2)':
+      case 'Array2D(2)':
+      case 'Array3D(2)':
+        retArr.push(`getMemoryOptimizedVec2(${ markupName }, ${ markupName }Size, ${ markupName }Dim, `);
+        this.memberExpressionXYZ(xProperty, yProperty, zProperty, retArr);
+        retArr.push(')');
+        break;
       case 'ArrayTexture(2)':
         retArr.push(`getVec2FromSampler2D(${ markupName }, ${ markupName }Size, ${ markupName }Dim, `);
+        this.memberExpressionXYZ(xProperty, yProperty, zProperty, retArr);
+        retArr.push(')');
+        break;
+      case 'Array1D(3)':
+      case 'Array2D(3)':
+      case 'Array3D(3)':
+        retArr.push(`getMemoryOptimizedVec3(${ markupName }, ${ markupName }Size, ${ markupName }Dim, `);
         this.memberExpressionXYZ(xProperty, yProperty, zProperty, retArr);
         retArr.push(')');
         break;
@@ -13705,8 +22275,16 @@ class WebGLFunctionNode extends FunctionNode {
         this.memberExpressionXYZ(xProperty, yProperty, zProperty, retArr);
         retArr.push(')');
         break;
+      case 'Array1D(4)':
+      case 'Array2D(4)':
+      case 'Array3D(4)':
+        retArr.push(`getMemoryOptimizedVec4(${ markupName }, ${ markupName }Size, ${ markupName }Dim, `);
+        this.memberExpressionXYZ(xProperty, yProperty, zProperty, retArr);
+        retArr.push(')');
+        break;
       case 'ArrayTexture(4)':
       case 'HTMLImage':
+      case 'HTMLVideo':
         retArr.push(`getVec4FromSampler2D(${ markupName }, ${ markupName }Size, ${ markupName }Dim, `);
         this.memberExpressionXYZ(xProperty, yProperty, zProperty, retArr);
         retArr.push(')');
@@ -13893,11 +22471,9 @@ class WebGLFunctionNode extends FunctionNode {
           case 'Array(2)':
           case 'Array(3)':
           case 'Array(4)':
-            if (targetType === argumentType) {
-              this.astGeneric(argument, retArr);
-              continue;
-            }
-            break;
+          case 'HTMLImage':
+          case 'HTMLImageArray':
+          case 'HTMLVideo':
           case 'ArrayTexture(1)':
           case 'ArrayTexture(2)':
           case 'ArrayTexture(3)':
@@ -13905,8 +22481,9 @@ class WebGLFunctionNode extends FunctionNode {
           case 'Array':
           case 'Input':
             if (targetType === argumentType) {
-              this.triggerTrackArgumentSynonym(this.name, argument.name, functionName, i);
-              this.astGeneric(argument, retArr);
+              if (argument.type !== 'Identifier') throw this.astErrorOutput(`Unhandled argument type ${ argument.type }`, ast);
+              this.triggerImplyArgumentBitRatio(this.name, argument.name, functionName, i);
+              retArr.push(`user_${argument.name},user_${argument.name}Size,user_${argument.name}Dim`);
               continue;
             }
             break;
@@ -13997,6 +22574,9 @@ const typeMap = {
   'ArrayTexture(2)': 'sampler2D',
   'ArrayTexture(3)': 'sampler2D',
   'ArrayTexture(4)': 'sampler2D',
+  'HTMLVideo': 'sampler2D',
+  'HTMLImage': 'sampler2D',
+  'HTMLImageArray': 'sampler2DArray',
 };
 
 const operatorMap = {
@@ -14007,13 +22587,16 @@ const operatorMap = {
 module.exports = {
   WebGLFunctionNode
 };
-},{"../../utils":89,"../function-node":10}],38:[function(require,module,exports){
+},{"../../utils":150,"../function-node":49}],77:[function(require,module,exports){
 const { WebGLKernelValueBoolean } = require('./kernel-value/boolean');
 const { WebGLKernelValueFloat } = require('./kernel-value/float');
 const { WebGLKernelValueInteger } = require('./kernel-value/integer');
 
 const { WebGLKernelValueHTMLImage } = require('./kernel-value/html-image');
 const { WebGLKernelValueDynamicHTMLImage } = require('./kernel-value/dynamic-html-image');
+
+const { WebGLKernelValueHTMLVideo } = require('./kernel-value/html-video');
+const { WebGLKernelValueDynamicHTMLVideo } = require('./kernel-value/dynamic-html-video');
 
 const { WebGLKernelValueSingleInput } = require('./kernel-value/single-input');
 const { WebGLKernelValueDynamicSingleInput } = require('./kernel-value/dynamic-single-input');
@@ -14030,6 +22613,19 @@ const { WebGLKernelValueDynamicNumberTexture } = require('./kernel-value/dynamic
 const { WebGLKernelValueSingleArray } = require('./kernel-value/single-array');
 const { WebGLKernelValueDynamicSingleArray } = require('./kernel-value/dynamic-single-array');
 
+const { WebGLKernelValueSingleArray1DI } = require('./kernel-value/single-array1d-i');
+const { WebGLKernelValueDynamicSingleArray1DI } = require('./kernel-value/dynamic-single-array1d-i');
+
+const { WebGLKernelValueSingleArray2DI } = require('./kernel-value/single-array2d-i');
+const { WebGLKernelValueDynamicSingleArray2DI } = require('./kernel-value/dynamic-single-array2d-i');
+
+const { WebGLKernelValueSingleArray3DI } = require('./kernel-value/single-array3d-i');
+const { WebGLKernelValueDynamicSingleArray3DI } = require('./kernel-value/dynamic-single-array3d-i');
+
+const { WebGLKernelValueSingleArray2 } = require('./kernel-value/single-array2');
+const { WebGLKernelValueSingleArray3 } = require('./kernel-value/single-array3');
+const { WebGLKernelValueSingleArray4 } = require('./kernel-value/single-array4');
+
 const { WebGLKernelValueUnsignedArray } = require('./kernel-value/unsigned-array');
 const { WebGLKernelValueDynamicUnsignedArray } = require('./kernel-value/dynamic-unsigned-array');
 
@@ -14040,6 +22636,18 @@ const kernelValueMaps = {
       'Integer': WebGLKernelValueInteger,
       'Float': WebGLKernelValueFloat,
       'Array': WebGLKernelValueDynamicUnsignedArray,
+      'Array(2)': false,
+      'Array(3)': false,
+      'Array(4)': false,
+      'Array1D(2)': false,
+      'Array1D(3)': false,
+      'Array1D(4)': false,
+      'Array2D(2)': false,
+      'Array2D(3)': false,
+      'Array2D(4)': false,
+      'Array3D(2)': false,
+      'Array3D(3)': false,
+      'Array3D(4)': false,
       'Input': WebGLKernelValueDynamicUnsignedInput,
       'NumberTexture': WebGLKernelValueDynamicNumberTexture,
       'ArrayTexture(1)': WebGLKernelValueDynamicNumberTexture,
@@ -14049,21 +22657,35 @@ const kernelValueMaps = {
       'MemoryOptimizedNumberTexture': WebGLKernelValueDynamicMemoryOptimizedNumberTexture,
       'HTMLImage': WebGLKernelValueDynamicHTMLImage,
       'HTMLImageArray': false,
+      'HTMLVideo': WebGLKernelValueDynamicHTMLVideo,
     },
     static: {
       'Boolean': WebGLKernelValueBoolean,
       'Float': WebGLKernelValueFloat,
       'Integer': WebGLKernelValueInteger,
       'Array': WebGLKernelValueUnsignedArray,
+      'Array(2)': false,
+      'Array(3)': false,
+      'Array(4)': false,
+      'Array1D(2)': false,
+      'Array1D(3)': false,
+      'Array1D(4)': false,
+      'Array2D(2)': false,
+      'Array2D(3)': false,
+      'Array2D(4)': false,
+      'Array3D(2)': false,
+      'Array3D(3)': false,
+      'Array3D(4)': false,
       'Input': WebGLKernelValueUnsignedInput,
       'NumberTexture': WebGLKernelValueNumberTexture,
       'ArrayTexture(1)': WebGLKernelValueNumberTexture,
       'ArrayTexture(2)': WebGLKernelValueNumberTexture,
       'ArrayTexture(3)': WebGLKernelValueNumberTexture,
       'ArrayTexture(4)': WebGLKernelValueNumberTexture,
-      'MemoryOptimizedNumberTexture': WebGLKernelValueDynamicMemoryOptimizedNumberTexture,
+      'MemoryOptimizedNumberTexture': WebGLKernelValueMemoryOptimizedNumberTexture,
       'HTMLImage': WebGLKernelValueHTMLImage,
       'HTMLImageArray': false,
+      'HTMLVideo': WebGLKernelValueHTMLVideo,
     }
   },
   single: {
@@ -14072,6 +22694,18 @@ const kernelValueMaps = {
       'Integer': WebGLKernelValueInteger,
       'Float': WebGLKernelValueFloat,
       'Array': WebGLKernelValueDynamicSingleArray,
+      'Array(2)': WebGLKernelValueSingleArray2,
+      'Array(3)': WebGLKernelValueSingleArray3,
+      'Array(4)': WebGLKernelValueSingleArray4,
+      'Array1D(2)': WebGLKernelValueDynamicSingleArray1DI,
+      'Array1D(3)': WebGLKernelValueDynamicSingleArray1DI,
+      'Array1D(4)': WebGLKernelValueDynamicSingleArray1DI,
+      'Array2D(2)': WebGLKernelValueDynamicSingleArray2DI,
+      'Array2D(3)': WebGLKernelValueDynamicSingleArray2DI,
+      'Array2D(4)': WebGLKernelValueDynamicSingleArray2DI,
+      'Array3D(2)': WebGLKernelValueDynamicSingleArray3DI,
+      'Array3D(3)': WebGLKernelValueDynamicSingleArray3DI,
+      'Array3D(4)': WebGLKernelValueDynamicSingleArray3DI,
       'Input': WebGLKernelValueDynamicSingleInput,
       'NumberTexture': WebGLKernelValueDynamicNumberTexture,
       'ArrayTexture(1)': WebGLKernelValueDynamicNumberTexture,
@@ -14081,12 +22715,25 @@ const kernelValueMaps = {
       'MemoryOptimizedNumberTexture': WebGLKernelValueDynamicMemoryOptimizedNumberTexture,
       'HTMLImage': WebGLKernelValueDynamicHTMLImage,
       'HTMLImageArray': false,
+      'HTMLVideo': WebGLKernelValueDynamicHTMLVideo,
     },
     static: {
       'Boolean': WebGLKernelValueBoolean,
       'Float': WebGLKernelValueFloat,
       'Integer': WebGLKernelValueInteger,
       'Array': WebGLKernelValueSingleArray,
+      'Array(2)': WebGLKernelValueSingleArray2,
+      'Array(3)': WebGLKernelValueSingleArray3,
+      'Array(4)': WebGLKernelValueSingleArray4,
+      'Array1D(2)': WebGLKernelValueSingleArray1DI,
+      'Array1D(3)': WebGLKernelValueSingleArray1DI,
+      'Array1D(4)': WebGLKernelValueSingleArray1DI,
+      'Array2D(2)': WebGLKernelValueSingleArray2DI,
+      'Array2D(3)': WebGLKernelValueSingleArray2DI,
+      'Array2D(4)': WebGLKernelValueSingleArray2DI,
+      'Array3D(2)': WebGLKernelValueSingleArray3DI,
+      'Array3D(3)': WebGLKernelValueSingleArray3DI,
+      'Array3D(4)': WebGLKernelValueSingleArray3DI,
       'Input': WebGLKernelValueSingleInput,
       'NumberTexture': WebGLKernelValueNumberTexture,
       'ArrayTexture(1)': WebGLKernelValueNumberTexture,
@@ -14096,11 +22743,12 @@ const kernelValueMaps = {
       'MemoryOptimizedNumberTexture': WebGLKernelValueMemoryOptimizedNumberTexture,
       'HTMLImage': WebGLKernelValueHTMLImage,
       'HTMLImageArray': false,
+      'HTMLVideo': WebGLKernelValueHTMLVideo,
     }
   },
 };
 
-function lookupKernelValueType(type, dynamic, precision) {
+function lookupKernelValueType(type, dynamic, precision, value) {
   if (!type) {
     throw new Error('type missing');
   }
@@ -14109,6 +22757,9 @@ function lookupKernelValueType(type, dynamic, precision) {
   }
   if (!precision) {
     throw new Error('precision missing');
+  }
+  if (value.type) {
+    type = value.type;
   }
   const types = kernelValueMaps[precision][dynamic];
   if (types[type] === false) {
@@ -14120,9 +22771,10 @@ function lookupKernelValueType(type, dynamic, precision) {
 }
 
 module.exports = {
-  lookupKernelValueType
+  lookupKernelValueType,
+  kernelValueMaps,
 };
-},{"./kernel-value/boolean":39,"./kernel-value/dynamic-html-image":40,"./kernel-value/dynamic-memory-optimized-number-texture":41,"./kernel-value/dynamic-number-texture":42,"./kernel-value/dynamic-single-array":43,"./kernel-value/dynamic-single-input":44,"./kernel-value/dynamic-unsigned-array":45,"./kernel-value/dynamic-unsigned-input":46,"./kernel-value/float":47,"./kernel-value/html-image":48,"./kernel-value/integer":50,"./kernel-value/memory-optimized-number-texture":51,"./kernel-value/number-texture":52,"./kernel-value/single-array":53,"./kernel-value/single-input":54,"./kernel-value/unsigned-array":55,"./kernel-value/unsigned-input":56}],39:[function(require,module,exports){
+},{"./kernel-value/boolean":78,"./kernel-value/dynamic-html-image":79,"./kernel-value/dynamic-html-video":80,"./kernel-value/dynamic-memory-optimized-number-texture":81,"./kernel-value/dynamic-number-texture":82,"./kernel-value/dynamic-single-array":83,"./kernel-value/dynamic-single-array1d-i":84,"./kernel-value/dynamic-single-array2d-i":85,"./kernel-value/dynamic-single-array3d-i":86,"./kernel-value/dynamic-single-input":87,"./kernel-value/dynamic-unsigned-array":88,"./kernel-value/dynamic-unsigned-input":89,"./kernel-value/float":90,"./kernel-value/html-image":91,"./kernel-value/html-video":92,"./kernel-value/integer":94,"./kernel-value/memory-optimized-number-texture":95,"./kernel-value/number-texture":96,"./kernel-value/single-array":97,"./kernel-value/single-array1d-i":98,"./kernel-value/single-array2":99,"./kernel-value/single-array2d-i":100,"./kernel-value/single-array3":101,"./kernel-value/single-array3d-i":102,"./kernel-value/single-array4":103,"./kernel-value/single-input":104,"./kernel-value/unsigned-array":105,"./kernel-value/unsigned-input":106}],78:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
@@ -14151,7 +22803,7 @@ class WebGLKernelValueBoolean extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueBoolean
 };
-},{"../../../utils":89,"./index":49}],40:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],79:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueHTMLImage } = require('./html-image');
 
@@ -14166,6 +22818,7 @@ class WebGLKernelValueDynamicHTMLImage extends WebGLKernelValueHTMLImage {
 
   updateValue(value) {
     const { width, height } = value;
+    this.checkSize(width, height);
     this.dimensions = [width, height, 1];
     this.textureSize = [width, height];
     this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
@@ -14177,7 +22830,15 @@ class WebGLKernelValueDynamicHTMLImage extends WebGLKernelValueHTMLImage {
 module.exports = {
   WebGLKernelValueDynamicHTMLImage
 };
-},{"../../../utils":89,"./html-image":48}],41:[function(require,module,exports){
+},{"../../../utils":150,"./html-image":91}],80:[function(require,module,exports){
+const { WebGLKernelValueDynamicHTMLImage } = require('./dynamic-html-image');
+
+class WebGLKernelValueDynamicHTMLVideo extends WebGLKernelValueDynamicHTMLImage {}
+
+module.exports = {
+  WebGLKernelValueDynamicHTMLVideo
+};
+},{"./dynamic-html-image":79}],81:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueMemoryOptimizedNumberTexture } = require('./memory-optimized-number-texture');
 
@@ -14191,6 +22852,7 @@ class WebGLKernelValueDynamicMemoryOptimizedNumberTexture extends WebGLKernelVal
   }
 
   updateValue(inputTexture) {
+    this.checkSize(inputTexture.size[0], inputTexture.size[1]);
     this.dimensions = inputTexture.dimensions;
     this.textureSize = inputTexture.size;
     this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
@@ -14202,7 +22864,7 @@ class WebGLKernelValueDynamicMemoryOptimizedNumberTexture extends WebGLKernelVal
 module.exports = {
   WebGLKernelValueDynamicMemoryOptimizedNumberTexture
 };
-},{"../../../utils":89,"./memory-optimized-number-texture":51}],42:[function(require,module,exports){
+},{"../../../utils":150,"./memory-optimized-number-texture":95}],82:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueNumberTexture } = require('./number-texture');
 
@@ -14217,6 +22879,7 @@ class WebGLKernelValueDynamicNumberTexture extends WebGLKernelValueNumberTexture
 
   updateValue(value) {
     this.dimensions = value.dimensions;
+    this.checkSize(value.size[0], value.size[1]);
     this.textureSize = value.size;
     this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
     this.kernel.setUniform2iv(this.sizeId, this.textureSize);
@@ -14227,7 +22890,7 @@ class WebGLKernelValueDynamicNumberTexture extends WebGLKernelValueNumberTexture
 module.exports = {
   WebGLKernelValueDynamicNumberTexture
 };
-},{"../../../utils":89,"./number-texture":52}],43:[function(require,module,exports){
+},{"../../../utils":150,"./number-texture":96}],83:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueSingleArray } = require('./single-array');
 
@@ -14244,6 +22907,7 @@ class WebGLKernelValueDynamicSingleArray extends WebGLKernelValueSingleArray {
     this.dimensions = utils.getDimensions(value, true);
     this.textureSize = utils.getMemoryOptimizedFloatTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
+    this.checkSize(this.textureSize[0] * this.bitRatio, this.textureSize[1] * this.bitRatio);
     this.uploadValue = new Float32Array(this.uploadArrayLength);
     this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
     this.kernel.setUniform2iv(this.sizeId, this.textureSize);
@@ -14254,7 +22918,79 @@ class WebGLKernelValueDynamicSingleArray extends WebGLKernelValueSingleArray {
 module.exports = {
   WebGLKernelValueDynamicSingleArray
 };
-},{"../../../utils":89,"./single-array":53}],44:[function(require,module,exports){
+},{"../../../utils":150,"./single-array":97}],84:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValueSingleArray1DI } = require('./single-array1d-i');
+
+class WebGLKernelValueDynamicSingleArray1DI extends WebGLKernelValueSingleArray1DI {
+  getSource() {
+    return utils.linesToString([
+      `uniform sampler2D ${this.id}`,
+      `uniform ivec2 ${this.sizeId}`,
+      `uniform ivec3 ${this.dimensionsId}`,
+    ]);
+  }
+
+  updateValue(value) {
+    this.setShape(value);
+    this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
+    this.kernel.setUniform2iv(this.sizeId, this.textureSize);
+    super.updateValue(value);
+  }
+}
+
+module.exports = {
+  WebGLKernelValueDynamicSingleArray1DI
+};
+},{"../../../utils":150,"./single-array1d-i":98}],85:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValueSingleArray2DI } = require('./single-array2d-i');
+
+class WebGLKernelValueDynamicSingleArray2DI extends WebGLKernelValueSingleArray2DI {
+  getSource() {
+    return utils.linesToString([
+      `uniform sampler2D ${this.id}`,
+      `uniform ivec2 ${this.sizeId}`,
+      `uniform ivec3 ${this.dimensionsId}`,
+    ]);
+  }
+
+  updateValue(value) {
+    this.setShape(value);
+    this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
+    this.kernel.setUniform2iv(this.sizeId, this.textureSize);
+    super.updateValue(value);
+  }
+}
+
+module.exports = {
+  WebGLKernelValueDynamicSingleArray2DI
+};
+},{"../../../utils":150,"./single-array2d-i":100}],86:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValueSingleArray3DI } = require('./single-array3d-i');
+
+class WebGLKernelValueDynamicSingleArray3DI extends WebGLKernelValueSingleArray3DI {
+  getSource() {
+    return utils.linesToString([
+      `uniform sampler2D ${this.id}`,
+      `uniform ivec2 ${this.sizeId}`,
+      `uniform ivec3 ${this.dimensionsId}`,
+    ]);
+  }
+
+  updateValue(value) {
+    this.setShape(value);
+    this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
+    this.kernel.setUniform2iv(this.sizeId, this.textureSize);
+    super.updateValue(value);
+  }
+}
+
+module.exports = {
+  WebGLKernelValueDynamicSingleArray3DI
+};
+},{"../../../utils":150,"./single-array3d-i":102}],87:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueSingleInput } = require('./single-input');
 
@@ -14272,6 +23008,7 @@ class WebGLKernelValueDynamicSingleInput extends WebGLKernelValueSingleInput {
     this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedFloatTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
+    this.checkSize(this.textureSize[0] * this.bitRatio, this.textureSize[1] * this.bitRatio);
     this.uploadValue = new Float32Array(this.uploadArrayLength);
     this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
     this.kernel.setUniform2iv(this.sizeId, this.textureSize);
@@ -14282,7 +23019,7 @@ class WebGLKernelValueDynamicSingleInput extends WebGLKernelValueSingleInput {
 module.exports = {
   WebGLKernelValueDynamicSingleInput
 };
-},{"../../../utils":89,"./single-input":54}],45:[function(require,module,exports){
+},{"../../../utils":150,"./single-input":104}],88:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueUnsignedArray } = require('./unsigned-array');
 
@@ -14299,6 +23036,7 @@ class WebGLKernelValueDynamicUnsignedArray extends WebGLKernelValueUnsignedArray
     this.dimensions = utils.getDimensions(value, true);
     this.textureSize = utils.getMemoryOptimizedPackedTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * (4 / this.bitRatio);
+    this.checkSize(this.textureSize[0] * (4 / this.bitRatio), this.textureSize[1] * (4 / this.bitRatio));
     const Type = this.getTransferArrayType(value);
     this.preUploadValue = new Type(this.uploadArrayLength);
     this.uploadValue = new Uint8Array(this.preUploadValue.buffer);
@@ -14311,7 +23049,7 @@ class WebGLKernelValueDynamicUnsignedArray extends WebGLKernelValueUnsignedArray
 module.exports = {
   WebGLKernelValueDynamicUnsignedArray
 };
-},{"../../../utils":89,"./unsigned-array":55}],46:[function(require,module,exports){
+},{"../../../utils":150,"./unsigned-array":105}],89:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueUnsignedInput } = require('./unsigned-input');
 
@@ -14329,6 +23067,7 @@ class WebGLKernelValueDynamicUnsignedInput extends WebGLKernelValueUnsignedInput
     this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedPackedTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * (4 / this.bitRatio);
+    this.checkSize(this.textureSize[0] * (4 / this.bitRatio), this.textureSize[1] * (4 / this.bitRatio));
     const Type = this.getTransferArrayType(value.value);
     this.preUploadValue = new Type(this.uploadArrayLength);
     this.uploadValue = new Uint8Array(this.preUploadValue.buffer);
@@ -14341,7 +23080,7 @@ class WebGLKernelValueDynamicUnsignedInput extends WebGLKernelValueUnsignedInput
 module.exports = {
   WebGLKernelValueDynamicUnsignedInput
 };
-},{"../../../utils":89,"./unsigned-input":56}],47:[function(require,module,exports){
+},{"../../../utils":150,"./unsigned-input":106}],90:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
@@ -14372,7 +23111,7 @@ class WebGLKernelValueFloat extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueFloat
 };
-},{"../../../utils":89,"./index":49}],48:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],91:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
@@ -14380,6 +23119,7 @@ class WebGLKernelValueHTMLImage extends WebGLKernelValue {
   constructor(value, settings) {
     super(value, settings);
     const { width, height } = value;
+    this.checkSize(width, height);
     this.dimensions = [width, height, 1];
     this.requestTexture();
     this.textureSize = [width, height];
@@ -14419,15 +23159,24 @@ class WebGLKernelValueHTMLImage extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueHTMLImage
 };
-},{"../../../utils":89,"./index":49}],49:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],92:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValueHTMLImage } = require('./html-image');
+
+class WebGLKernelValueHTMLVideo extends WebGLKernelValueHTMLImage {}
+
+module.exports = {
+  WebGLKernelValueHTMLVideo
+};
+},{"../../../utils":150,"./html-image":91}],93:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { Input } = require('../../../input');
 const { KernelValue } = require('../../kernel-value');
 
 class WebGLKernelValue extends KernelValue {
   /**
-   *
-   * @param {IWebGLKernerlValueSettings} settings
+   * @param {KernelVariable} value
+   * @param {IWebGLKernelValueSettings} settings
    */
   constructor(value, settings) {
     super(value, settings);
@@ -14439,6 +23188,23 @@ class WebGLKernelValue extends KernelValue {
     this.uploadValue = null;
     this.textureSize = null;
     this.bitRatio = null;
+  }
+
+  /**
+   *
+   * @param {number} width
+   * @param {number} height
+   */
+  checkSize(width, height) {
+    if (!this.kernel.validate) return;
+    const { maxTextureSize } = this.kernel.constructor.features;
+    if (width > maxTextureSize || height > maxTextureSize) {
+      if (width > height) {
+        throw new Error(`Argument width of ${width} larger than maximum size of ${maxTextureSize} for your GPU`);
+      } else {
+        throw new Error(`Argument height of ${height} larger than maximum size of ${maxTextureSize} for your GPU`);
+      }
+    }
   }
 
   requestTexture() {
@@ -14543,12 +23309,24 @@ class WebGLKernelValue extends KernelValue {
   getStringValueHandler() {
     throw new Error(`"getStringValueHandler" not implemented on ${this.constructor.name}`);
   }
+
+  getVariablePrecisionString() {
+    switch (this.tactic) {
+      case 'speed':
+        return 'lowp';
+      case 'performance':
+        return 'highp';
+      case 'balanced':
+      default:
+        return 'mediump';
+    }
+  }
 }
 
 module.exports = {
   WebGLKernelValue
 };
-},{"../../../input":85,"../../../utils":89,"../../kernel-value":34}],50:[function(require,module,exports){
+},{"../../../input":146,"../../../utils":150,"../../kernel-value":73}],94:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
@@ -14576,13 +23354,15 @@ class WebGLKernelValueInteger extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueInteger
 };
-},{"../../../utils":89,"./index":49}],51:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],95:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
 class WebGLKernelValueMemoryOptimizedNumberTexture extends WebGLKernelValue {
   constructor(value, settings) {
     super(value, settings);
+    const [width, height] = value.size;
+    this.checkSize(width, height);
     this.setupTexture();
     this.dimensions = value.dimensions;
     this.textureSize = value.size;
@@ -14619,13 +23399,15 @@ class WebGLKernelValueMemoryOptimizedNumberTexture extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueMemoryOptimizedNumberTexture
 };
-},{"../../../utils":89,"./index":49}],52:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],96:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
 class WebGLKernelValueNumberTexture extends WebGLKernelValue {
   constructor(value, settings) {
     super(value, settings);
+    const [width, height] = value.size;
+    this.checkSize(width, height);
     this.setupTexture();
     const { size: textureSize, dimensions } = value;
     this.bitRatio = this.getBitRatio(value);
@@ -14664,7 +23446,7 @@ class WebGLKernelValueNumberTexture extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueNumberTexture
 };
-},{"../../../utils":89,"./index":49}],53:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],97:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
@@ -14676,6 +23458,7 @@ class WebGLKernelValueSingleArray extends WebGLKernelValue {
     this.dimensions = utils.getDimensions(value, true);
     this.textureSize = utils.getMemoryOptimizedFloatTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
+    this.checkSize(this.textureSize[0] * this.bitRatio, this.textureSize[1] * this.bitRatio);
     this.uploadValue = new Float32Array(this.uploadArrayLength);
   }
 
@@ -14715,7 +23498,265 @@ class WebGLKernelValueSingleArray extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueSingleArray
 };
-},{"../../../utils":89,"./index":49}],54:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],98:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValue } = require('./index');
+
+class WebGLKernelValueSingleArray1DI extends WebGLKernelValue {
+  constructor(value, settings) {
+    super(value, settings);
+    this.requestTexture();
+    this.bitRatio = 4;
+    this.setShape(value);
+  }
+
+  setShape(value) {
+    const valueDimensions = utils.getDimensions(value, true);
+    this.textureSize = utils.getMemoryOptimizedFloatTextureSize(valueDimensions, this.bitRatio);
+    this.dimensions = new Int32Array([valueDimensions[1], 1, 1]);
+    this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
+    this.checkSize(this.textureSize[0] * this.bitRatio, this.textureSize[1] * this.bitRatio);
+    this.uploadValue = new Float32Array(this.uploadArrayLength);
+  }
+
+  getStringValueHandler() {
+    return utils.linesToString([
+      `const uploadValue_${this.name} = new Float32Array(${this.uploadArrayLength})`,
+      `flattenTo(${this.varName}, uploadValue_${this.name})`,
+    ]);
+  }
+
+  getSource() {
+    return utils.linesToString([
+      `uniform sampler2D ${this.id}`,
+      `ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+    ]);
+  }
+
+  updateValue(value) {
+    if (value.constructor !== this.initialValueConstructor) {
+      this.onUpdateValueMismatch();
+      return;
+    }
+    const { context: gl } = this;
+    utils.flatten2dArrayTo(value, this.uploadValue);
+    gl.activeTexture(this.contextHandle);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.textureSize[0], this.textureSize[1], 0, gl.RGBA, gl.FLOAT, this.uploadValue);
+    this.kernel.setUniform1i(this.id, this.index);
+  }
+}
+
+module.exports = {
+  WebGLKernelValueSingleArray1DI
+};
+},{"../../../utils":150,"./index":93}],99:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValue } = require('./index');
+
+class WebGLKernelValueSingleArray2 extends WebGLKernelValue {
+  constructor(value, settings) {
+    super(value, settings);
+    this.uploadValue = value;
+  }
+  getSource(value) {
+    if (this.origin === 'constants') {
+      return `const vec2 ${this.id} = vec2(${value[0]},${value[1]});\n`;
+    }
+    return `uniform vec2 ${this.id};\n`;
+  }
+
+  getStringValueHandler() {
+    return `const uploadValue_${this.name} = ${this.varName};\n`;
+  }
+
+  updateValue(value) {
+    if (this.origin === 'constants') return;
+    this.kernel.setUniform2fv(this.id, this.uploadValue = value);
+  }
+}
+
+module.exports = {
+  WebGLKernelValueSingleArray2
+};
+},{"../../../utils":150,"./index":93}],100:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValue } = require('./index');
+
+class WebGLKernelValueSingleArray2DI extends WebGLKernelValue {
+  constructor(value, settings) {
+    super(value, settings);
+    this.requestTexture();
+    this.bitRatio = 4;
+    this.setShape(value);
+  }
+
+  setShape(value) {
+    const valueDimensions = utils.getDimensions(value, true);
+    this.textureSize = utils.getMemoryOptimizedFloatTextureSize(valueDimensions, this.bitRatio);
+    this.dimensions = new Int32Array([valueDimensions[1], valueDimensions[2], 1]);
+    this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
+    this.checkSize(this.textureSize[0] * this.bitRatio, this.textureSize[1] * this.bitRatio);
+    this.uploadValue = new Float32Array(this.uploadArrayLength);
+  }
+
+  getStringValueHandler() {
+    return utils.linesToString([
+      `const uploadValue_${this.name} = new Float32Array(${this.uploadArrayLength})`,
+      `flattenTo(${this.varName}, uploadValue_${this.name})`,
+    ]);
+  }
+
+  getSource() {
+    return utils.linesToString([
+      `uniform sampler2D ${this.id}`,
+      `ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+    ]);
+  }
+
+  updateValue(value) {
+    if (value.constructor !== this.initialValueConstructor) {
+      this.onUpdateValueMismatch();
+      return;
+    }
+    const { context: gl } = this;
+    utils.flatten3dArrayTo(value, this.uploadValue);
+    gl.activeTexture(this.contextHandle);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.textureSize[0], this.textureSize[1], 0, gl.RGBA, gl.FLOAT, this.uploadValue);
+    this.kernel.setUniform1i(this.id, this.index);
+  }
+}
+
+module.exports = {
+  WebGLKernelValueSingleArray2DI
+};
+},{"../../../utils":150,"./index":93}],101:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValue } = require('./index');
+
+class WebGLKernelValueSingleArray3 extends WebGLKernelValue {
+  constructor(value, settings) {
+    super(value, settings);
+    this.uploadValue = value;
+  }
+  getSource(value) {
+    if (this.origin === 'constants') {
+      return `const vec3 ${this.id} = vec3(${value[0]},${value[1]},${value[2]});\n`;
+    }
+    return `uniform vec3 ${this.id};\n`;
+  }
+
+  getStringValueHandler() {
+    return `const uploadValue_${this.name} = ${this.varName};\n`;
+  }
+
+  updateValue(value) {
+    if (this.origin === 'constants') return;
+    this.kernel.setUniform3fv(this.id, this.uploadValue = value);
+  }
+}
+
+module.exports = {
+  WebGLKernelValueSingleArray3
+};
+},{"../../../utils":150,"./index":93}],102:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValue } = require('./index');
+
+class WebGLKernelValueSingleArray3DI extends WebGLKernelValue {
+  constructor(value, settings) {
+    super(value, settings);
+    this.requestTexture();
+    this.bitRatio = 4;
+    this.setShape(value);
+  }
+
+  setShape(value) {
+    const valueDimensions = utils.getDimensions(value, true);
+    this.textureSize = utils.getMemoryOptimizedFloatTextureSize(valueDimensions, this.bitRatio);
+    this.dimensions = new Int32Array([valueDimensions[1], valueDimensions[2], valueDimensions[3]]);
+    this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
+    this.checkSize(this.textureSize[0] * this.bitRatio, this.textureSize[1] * this.bitRatio);
+    this.uploadValue = new Float32Array(this.uploadArrayLength);
+  }
+
+  getStringValueHandler() {
+    return utils.linesToString([
+      `const uploadValue_${this.name} = new Float32Array(${this.uploadArrayLength})`,
+      `flattenTo(${this.varName}, uploadValue_${this.name})`,
+    ]);
+  }
+
+  getSource() {
+    return utils.linesToString([
+      `uniform sampler2D ${this.id}`,
+      `ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+    ]);
+  }
+
+  updateValue(value) {
+    if (value.constructor !== this.initialValueConstructor) {
+      this.onUpdateValueMismatch();
+      return;
+    }
+    const { context: gl } = this;
+    utils.flatten4dArrayTo(value, this.uploadValue);
+    gl.activeTexture(this.contextHandle);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.textureSize[0], this.textureSize[1], 0, gl.RGBA, gl.FLOAT, this.uploadValue);
+    this.kernel.setUniform1i(this.id, this.index);
+  }
+}
+
+module.exports = {
+  WebGLKernelValueSingleArray3DI
+};
+},{"../../../utils":150,"./index":93}],103:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValue } = require('./index');
+
+class WebGLKernelValueSingleArray4 extends WebGLKernelValue {
+  constructor(value, settings) {
+    super(value, settings);
+    this.uploadValue = value;
+  }
+  getSource(value) {
+    if (this.origin === 'constants') {
+      return `const vec4 ${this.id} = vec4(${value[0]},${value[1]},${value[2]},${value[3]});\n`;
+    }
+    return `uniform vec4 ${this.id};\n`;
+  }
+
+  getStringValueHandler() {
+    return `const uploadValue_${this.name} = ${this.varName};\n`;
+  }
+
+  updateValue(value) {
+    if (this.origin === 'constants') return;
+    this.kernel.setUniform4fv(this.id, this.uploadValue = value);
+  }
+}
+
+module.exports = {
+  WebGLKernelValueSingleArray4
+};
+},{"../../../utils":150,"./index":93}],104:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
@@ -14728,6 +23769,7 @@ class WebGLKernelValueSingleInput extends WebGLKernelValue {
     this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedFloatTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
+    this.checkSize(this.textureSize[0] * this.bitRatio, this.textureSize[1] * this.bitRatio);
     this.uploadValue = new Float32Array(this.uploadArrayLength);
   }
 
@@ -14767,7 +23809,7 @@ class WebGLKernelValueSingleInput extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueSingleInput
 };
-},{"../../../utils":89,"./index":49}],55:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],105:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
@@ -14779,6 +23821,7 @@ class WebGLKernelValueUnsignedArray extends WebGLKernelValue {
     this.dimensions = utils.getDimensions(value, true);
     this.textureSize = utils.getMemoryOptimizedPackedTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * (4 / this.bitRatio);
+    this.checkSize(this.textureSize[0] * (4 / this.bitRatio), this.textureSize[1] * (4 / this.bitRatio));
     this.TranserArrayType = this.getTransferArrayType(value);
     this.preUploadValue = new this.TranserArrayType(this.uploadArrayLength);
     this.uploadValue = new Uint8Array(this.preUploadValue.buffer);
@@ -14821,7 +23864,7 @@ class WebGLKernelValueUnsignedArray extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueUnsignedArray
 };
-},{"../../../utils":89,"./index":49}],56:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],106:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('./index');
 
@@ -14834,6 +23877,7 @@ class WebGLKernelValueUnsignedInput extends WebGLKernelValue {
     this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedPackedTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * (4 / this.bitRatio);
+    this.checkSize(this.textureSize[0] * (4 / this.bitRatio), this.textureSize[1] * (4 / this.bitRatio));
     this.TranserArrayType = this.getTransferArrayType(value.value);
     this.preUploadValue = new this.TranserArrayType(this.uploadArrayLength);
     this.uploadValue = new Uint8Array(this.preUploadValue.buffer);
@@ -14876,7 +23920,7 @@ class WebGLKernelValueUnsignedInput extends WebGLKernelValue {
 module.exports = {
   WebGLKernelValueUnsignedInput
 };
-},{"../../../utils":89,"./index":49}],57:[function(require,module,exports){
+},{"../../../utils":150,"./index":93}],107:[function(require,module,exports){
 const { GLKernel } = require('../gl/kernel');
 const { FunctionBuilder } = require('../function-builder');
 const { WebGLFunctionNode } = require('./function-node');
@@ -14960,6 +24004,7 @@ class WebGLKernel extends GLKernel {
       isDrawBuffers,
       kernelMap: isDrawBuffers,
       channelCount: this.getChannelCount(),
+      maxTextureSize: this.getMaxTextureSize(),
     });
   }
 
@@ -14977,8 +24022,12 @@ class WebGLKernel extends GLKernel {
       1;
   }
 
-  static lookupKernelValueType(type, dynamic, precision) {
-    return lookupKernelValueType(type, dynamic, precision);
+  static getMaxTextureSize() {
+    return testContext.getParameter(testContext.MAX_TEXTURE_SIZE);
+  }
+
+  static lookupKernelValueType(type, dynamic, precision, value) {
+    return lookupKernelValueType(type, dynamic, precision, value);
   }
 
   static get testCanvas() {
@@ -15049,6 +24098,8 @@ class WebGLKernel extends GLKernel {
     this.uniform2ivCache = {};
     this.uniform3fvCache = {};
     this.uniform3ivCache = {};
+    this.uniform4fvCache = {};
+    this.uniform4ivCache = {};
   }
 
   initCanvas() {
@@ -15122,6 +24173,7 @@ class WebGLKernel extends GLKernel {
     }
 
     const { features } = this.constructor;
+
     if (this.optimizeFloatMemory === true && !features.isTextureFloat) {
       throw new Error('Float textures are not supported');
     } else if (this.precision === 'single' && !features.isFloatRead) {
@@ -15177,6 +24229,8 @@ class WebGLKernel extends GLKernel {
       optimizeFloatMemory: this.optimizeFloatMemory,
       precision: this.precision,
     }, this.output);
+
+    this.checkTextureSize();
   }
 
   updateMaxTexSize() {
@@ -15269,12 +24323,14 @@ class WebGLKernel extends GLKernel {
       } else {
         type = this.argumentTypes[index];
       }
-      const KernelValue = this.constructor.lookupKernelValueType(type, this.dynamicArguments ? 'dynamic' : 'static', this.precision);
+      const KernelValue = this.constructor.lookupKernelValueType(type, this.dynamicArguments ? 'dynamic' : 'static', this.precision, args[index]);
       if (KernelValue === null) {
         return this.requestFallback(args);
       }
       const kernelArgument = new KernelValue(value, {
         name,
+        type,
+        tactic: this.tactic,
         origin: 'user',
         context: gl,
         checkContext: this.checkContext,
@@ -15302,19 +24358,29 @@ class WebGLKernel extends GLKernel {
   setupConstants(args) {
     const { context: gl } = this;
     this.kernelConstants = [];
-    this.constantTypes = {};
+    let needsConstantTypes = this.constantTypes === null;
+    if (needsConstantTypes) {
+      this.constantTypes = {};
+    }
     this.constantBitRatios = {};
     let textureIndexes = 0;
     for (const name in this.constants) {
       const value = this.constants[name];
-      const type = utils.getVariableType(value, this.strictIntegers);
-      this.constantTypes[name] = type;
-      const KernelValue = this.constructor.lookupKernelValueType(type, 'static', this.precision);
+      let type;
+      if (needsConstantTypes) {
+        type = utils.getVariableType(value, this.strictIntegers);
+        this.constantTypes[name] = type;
+      } else {
+        type = this.constantTypes[name];
+      }
+      const KernelValue = this.constructor.lookupKernelValueType(type, 'static', this.precision, value);
       if (KernelValue === null) {
         return this.requestFallback(args);
       }
       const kernelValue = new KernelValue(value, {
         name,
+        type,
+        tactic: this.tactic,
         origin: 'constants',
         context: this.context,
         checkContext: this.checkContext,
@@ -15474,7 +24540,7 @@ class WebGLKernel extends GLKernel {
     gl.scissor(0, 0, texSize[0], texSize[1]);
 
     if (this.dynamicOutput) {
-      this.setUniform3iv('uOutputDim', this.threadDim);
+      this.setUniform3iv('uOutputDim', new Int32Array(this.threadDim));
       this.setUniform2iv('uTexSize', texSize);
     }
 
@@ -15482,9 +24548,8 @@ class WebGLKernel extends GLKernel {
 
     this.switchingKernels = false;
     for (let i = 0; i < kernelArguments.length; i++) {
-      // this will be handled in renderOutput
-      if (this.switchingKernels) return;
       kernelArguments[i].updateValue(arguments[i]);
+      if (this.switchingKernels) return;
     }
 
     if (this.plugins) {
@@ -15751,6 +24816,56 @@ class WebGLKernel extends GLKernel {
     this.context.uniform3iv(loc, value);
   }
 
+  setUniform3fv(name, value) {
+    if (this.uniform3fvCache.hasOwnProperty(name)) {
+      const cache = this.uniform3fvCache[name];
+      if (
+        value[0] === cache[0] &&
+        value[1] === cache[1] &&
+        value[2] === cache[2]
+      ) {
+        return;
+      }
+    }
+    this.uniform3fvCache[name] = value;
+    const loc = this.getUniformLocation(name);
+    this.context.uniform3fv(loc, value);
+  }
+
+  setUniform4iv(name, value) {
+    if (this.uniform4ivCache.hasOwnProperty(name)) {
+      const cache = this.uniform4ivCache[name];
+      if (
+        value[0] === cache[0] &&
+        value[1] === cache[1] &&
+        value[2] === cache[2] &&
+        value[3] === cache[3]
+      ) {
+        return;
+      }
+    }
+    this.uniform4ivCache[name] = value;
+    const loc = this.getUniformLocation(name);
+    this.context.uniform4iv(loc, value);
+  }
+
+  setUniform4fv(name, value) {
+    if (this.uniform4fvCache.hasOwnProperty(name)) {
+      const cache = this.uniform4fvCache[name];
+      if (
+        value[0] === cache[0] &&
+        value[1] === cache[1] &&
+        value[2] === cache[2] &&
+        value[3] === cache[3]
+      ) {
+        return;
+      }
+    }
+    this.uniform4fvCache[name] = value;
+    const loc = this.getUniformLocation(name);
+    this.context.uniform4fv(loc, value);
+  }
+
   /**
    * @desc Return WebGlUniformLocation for various variables
    * related to webGl program, such as user-defined variables,
@@ -15779,10 +24894,31 @@ class WebGLKernel extends GLKernel {
       DECODE32_ENDIANNESS: this._getDecode32EndiannessString(),
       ENCODE32_ENDIANNESS: this._getEncode32EndiannessString(),
       DIVIDE_WITH_INTEGER_CHECK: this._getDivideWithIntegerCheckString(),
+      INJECTED_NATIVE: this._getInjectedNative(),
       MAIN_CONSTANTS: this._getMainConstantsString(),
       MAIN_ARGUMENTS: this._getMainArgumentsString(args),
       KERNEL: this.getKernelString(),
-      MAIN_RESULT: this.getMainResultString()
+      MAIN_RESULT: this.getMainResultString(),
+      FLOAT_TACTIC_DECLARATION: this.getFloatTacticDeclaration(),
+      INT_TACTIC_DECLARATION: this.getIntTacticDeclaration(),
+      SAMPLER_2D_TACTIC_DECLARATION: this.getSampler2DTacticDeclaration(),
+      SAMPLER_2D_ARRAY_TACTIC_DECLARATION: this.getSampler2DArrayTacticDeclaration(),
+    };
+  }
+
+  /**
+   * @desc Generate Shader artifacts for the kernel program.
+   * The final object contains HEADER, KERNEL, MAIN_RESULT, and others.
+   *
+   * @param {Array} args - The actual parameters sent to the Kernel
+   * @returns {Object} An object containing the Shader Artifacts(CONSTANTS, HEADER, KERNEL, etc.)
+   */
+  _getVertShaderArtifactMap(args) {
+    return {
+      FLOAT_TACTIC_DECLARATION: this.getFloatTacticDeclaration(),
+      INT_TACTIC_DECLARATION: this.getIntTacticDeclaration(),
+      SAMPLER_2D_TACTIC_DECLARATION: this.getSampler2DTacticDeclaration(),
+      SAMPLER_2D_ARRAY_TACTIC_DECLARATION: this.getSampler2DArrayTacticDeclaration(),
     };
   }
 
@@ -15902,6 +25038,10 @@ class WebGLKernel extends GLKernel {
       results.push(this.kernelArguments[i].getSource(args[i]));
     }
     return results.join('');
+  }
+
+  _getInjectedNative() {
+    return this.injectedNative || '';
   }
 
   _getMainConstantsString() {
@@ -16234,7 +25374,7 @@ class WebGLKernel extends GLKernel {
    * @param {Object} map - Variables/Constants associated with shader
    */
   replaceArtifacts(src, map) {
-    return src.replace(/[ ]*__([A-Z]+[0-9]*([_]?[A-Z])*)__;\n/g, (match, artifact) => {
+    return src.replace(/[ ]*__([A-Z]+[0-9]*([_]?[A-Z]*[0-9]?)*)__;\n/g, (match, artifact) => {
       if (map.hasOwnProperty(artifact)) {
         return map[artifact];
       }
@@ -16266,7 +25406,7 @@ class WebGLKernel extends GLKernel {
     if (this.compiledVertexShader !== null) {
       return this.compiledVertexShader;
     }
-    return this.compiledVertexShader = this.constructor.vertexShader;
+    return this.compiledVertexShader = this.replaceArtifacts(this.constructor.vertexShader, this._getVertShaderArtifactMap(args));
   }
 
   /**
@@ -16347,10 +25487,11 @@ class WebGLKernel extends GLKernel {
 module.exports = {
   WebGLKernel
 };
-},{"../../plugins/triangle-noise":87,"../../utils":89,"../function-builder":9,"../gl/kernel":13,"../gl/kernel-string":12,"./fragment-shader":36,"./function-node":37,"./kernel-value-maps":38,"./vertex-shader":58}],58:[function(require,module,exports){
-const vertexShader = `precision highp float;
-precision highp int;
-precision highp sampler2D;
+},{"../../plugins/triangle-noise":148,"../../utils":150,"../function-builder":48,"../gl/kernel":52,"../gl/kernel-string":51,"./fragment-shader":75,"./function-node":76,"./kernel-value-maps":77,"./vertex-shader":108}],108:[function(require,module,exports){
+// language=GLSL
+const vertexShader = `__FLOAT_TACTIC_DECLARATION__;
+__INT_TACTIC_DECLARATION__;
+__SAMPLER_2D_TACTIC_DECLARATION__;
 
 attribute vec2 aPos;
 attribute vec2 aTexCoord;
@@ -16366,13 +25507,14 @@ void main(void) {
 module.exports = {
   vertexShader
 };
-},{}],59:[function(require,module,exports){
+},{}],109:[function(require,module,exports){
+// language=GLSL
 const fragmentShader = `#version 300 es
 __HEADER__;
-precision highp float;
-precision highp int;
-precision highp sampler2D;
-precision highp sampler2DArray;
+__FLOAT_TACTIC_DECLARATION__;
+__INT_TACTIC_DECLARATION__;
+__SAMPLER_2D_TACTIC_DECLARATION__;
+__SAMPLER_2D_ARRAY_TACTIC_DECLARATION__;
 
 const int LOOP_MAX = __LOOP_MAX__;
 
@@ -16624,8 +25766,7 @@ ivec3 indexTo3D(int idx, ivec3 texDim) {
 }
 
 float get32(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + texDim.x * (xyz.y + texDim.y * xyz.z);
+  int index = x + texDim.x * (y + texDim.y * z);
   int w = texSize.x;
   vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
   vec4 texel = texture(tex, st / vec2(texSize));
@@ -16633,8 +25774,7 @@ float get32(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
 }
 
 float get16(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + (texDim.x * (xyz.y + (texDim.y * xyz.z)));
+  int index = x + (texDim.x * (y + (texDim.y * z)));
   int w = texSize.x * 2;
   vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
   vec4 texel = texture(tex, st / vec2(texSize.x * 2, texSize.y));
@@ -16642,8 +25782,7 @@ float get16(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
 }
 
 float get8(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + (texDim.x * (xyz.y + (texDim.y * xyz.z)));
+  int index = x + (texDim.x * (y + (texDim.y * z)));
   int w = texSize.x * 4;
   vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
   vec4 texel = texture(tex, st / vec2(texSize.x * 4, texSize.y));
@@ -16651,8 +25790,7 @@ float get8(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
 }
 
 float getMemoryOptimized32(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + (texDim.x * (xyz.y + (texDim.y * xyz.z)));
+  int index = x + (texDim.x * (y + (texDim.y * z)));
   int channel = integerMod(index, 4);
   index = index / 4;
   int w = texSize.x;
@@ -16663,16 +25801,14 @@ float getMemoryOptimized32(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, in
 }
 
 vec4 getImage2D(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + texDim.x * (xyz.y + texDim.y * xyz.z);
+  int index = x + texDim.x * (y + texDim.y * z);
   int w = texSize.x;
   vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
   return texture(tex, st / vec2(texSize));
 }
 
 vec4 getImage3D(sampler2DArray tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
-  ivec3 xyz = ivec3(x, y, z);
-  int index = xyz.x + texDim.x * (xyz.y + texDim.y * xyz.z);
+  int index = x + texDim.x * (y + texDim.y * z);
   int w = texSize.x;
   vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
   return texture(tex, vec3(st / vec2(texSize), z));
@@ -16688,13 +25824,61 @@ vec2 getVec2FromSampler2D(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int
   return vec2(result[0], result[1]);
 }
 
+vec2 getMemoryOptimizedVec2(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
+  int index = x + texDim.x * (y + texDim.y * z);
+  int channel = integerMod(index, 2);
+  index = index / 2;
+  int w = texSize.x;
+  vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
+  vec4 texel = texture(tex, st / vec2(texSize));
+  if (channel == 0) return vec2(texel.r, texel.g);
+  if (channel == 1) return vec2(texel.b, texel.a);
+  return vec2(0.0, 0.0);
+}
+
 vec3 getVec3FromSampler2D(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
   vec4 result = getImage2D(tex, texSize, texDim, z, y, x);
   return vec3(result[0], result[1], result[2]);
 }
 
+vec3 getMemoryOptimizedVec3(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
+  int fieldIndex = 3 * (x + texDim.x * (y + texDim.y * z));
+  int vectorIndex = fieldIndex / 4;
+  int vectorOffset = fieldIndex - vectorIndex * 4;
+  int readY = vectorIndex / texSize.x;
+  int readX = vectorIndex - readY * texSize.x;
+  vec4 tex1 = texture(tex, (vec2(readX, readY) + 0.5) / vec2(texSize));
+
+  if (vectorOffset == 0) {
+    return tex1.xyz;
+  } else if (vectorOffset == 1) {
+    return tex1.yzw;
+  } else {
+    readX++;
+    if (readX >= texSize.x) {
+      readX = 0;
+      readY++;
+    }
+    vec4 tex2 = texture(tex, vec2(readX, readY) / vec2(texSize));
+    if (vectorOffset == 2) {
+      return vec3(tex1.z, tex1.w, tex2.x);
+    } else {
+      return vec3(tex1.w, tex2.x, tex2.y);
+    }
+  }
+}
+
 vec4 getVec4FromSampler2D(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
   return getImage2D(tex, texSize, texDim, z, y, x);
+}
+
+vec4 getMemoryOptimizedVec4(sampler2D tex, ivec2 texSize, ivec3 texDim, int z, int y, int x) {
+  int index = x + texDim.x * (y + texDim.y * z);
+  int channel = integerMod(index, 2);
+  int w = texSize.x;
+  vec2 st = vec2(float(integerMod(index, w)), float(index / w)) + 0.5;
+  vec4 texel = texture(tex, st / vec2(texSize));
+  return vec4(texel.r, texel.g, texel.b, texel.a);
 }
 
 vec4 actualColor;
@@ -16706,6 +25890,7 @@ void color(float r, float g, float b) {
   color(r,g,b,1.0);
 }
 
+__INJECTED_NATIVE__;
 __MAIN_CONSTANTS__;
 __MAIN_ARGUMENTS__;
 __KERNEL__;
@@ -16718,7 +25903,7 @@ void main(void) {
 module.exports = {
   fragmentShader
 };
-},{}],60:[function(require,module,exports){
+},{}],110:[function(require,module,exports){
 const { WebGLFunctionNode } = require('../web-gl/function-node');
 
 /**
@@ -16754,12 +25939,7 @@ class WebGL2FunctionNode extends WebGLFunctionNode {
         retArr.push(`user_${idtNode.name}`);
       }
     } else {
-      const userArgumentName = this.getKernelArgumentName(idtNode.name);
-      if (userArgumentName) {
-        retArr.push(`user_${userArgumentName}`);
-      } else {
-        retArr.push(`user_${idtNode.name}`);
-      }
+      retArr.push(`user_${idtNode.name}`);
     }
 
     return retArr;
@@ -16769,7 +25949,7 @@ class WebGL2FunctionNode extends WebGLFunctionNode {
 module.exports = {
   WebGL2FunctionNode
 };
-},{"../web-gl/function-node":37}],61:[function(require,module,exports){
+},{"../web-gl/function-node":76}],111:[function(require,module,exports){
 const { WebGL2KernelValueBoolean } = require('./kernel-value/boolean');
 const { WebGL2KernelValueFloat } = require('./kernel-value/float');
 const { WebGL2KernelValueInteger } = require('./kernel-value/integer');
@@ -16777,8 +25957,11 @@ const { WebGL2KernelValueInteger } = require('./kernel-value/integer');
 const { WebGL2KernelValueHTMLImage } = require('./kernel-value/html-image');
 const { WebGL2KernelValueDynamicHTMLImage } = require('./kernel-value/dynamic-html-image');
 
-const { WebGL2KernelValueHtmlImageArray } = require('./kernel-value/html-image-array');
-const { WebGL2KernelValueDynamicHtmlImageArray } = require('./kernel-value/dynamic-html-image-array');
+const { WebGL2KernelValueHTMLImageArray } = require('./kernel-value/html-image-array');
+const { WebGL2KernelValueDynamicHTMLImageArray } = require('./kernel-value/dynamic-html-image-array');
+
+const { WebGL2KernelValueHTMLVideo } = require('./kernel-value/html-video');
+const { WebGL2KernelValueDynamicHTMLVideo } = require('./kernel-value/dynamic-html-video');
 
 const { WebGL2KernelValueSingleInput } = require('./kernel-value/single-input');
 const { WebGL2KernelValueDynamicSingleInput } = require('./kernel-value/dynamic-single-input');
@@ -16795,6 +25978,19 @@ const { WebGL2KernelValueDynamicNumberTexture } = require('./kernel-value/dynami
 const { WebGL2KernelValueSingleArray } = require('./kernel-value/single-array');
 const { WebGL2KernelValueDynamicSingleArray } = require('./kernel-value/dynamic-single-array');
 
+const { WebGL2KernelValueSingleArray1DI } = require('./kernel-value/single-array1d-i');
+const { WebGL2KernelValueDynamicSingleArray1DI } = require('./kernel-value/dynamic-single-array1d-i');
+
+const { WebGL2KernelValueSingleArray2DI } = require('./kernel-value/single-array2d-i');
+const { WebGL2KernelValueDynamicSingleArray2DI } = require('./kernel-value/dynamic-single-array2d-i');
+
+const { WebGL2KernelValueSingleArray3DI } = require('./kernel-value/single-array3d-i');
+const { WebGL2KernelValueDynamicSingleArray3DI } = require('./kernel-value/dynamic-single-array3d-i');
+
+const { WebGL2KernelValueSingleArray2 } = require('./kernel-value/single-array2');
+const { WebGL2KernelValueSingleArray3 } = require('./kernel-value/single-array3');
+const { WebGL2KernelValueSingleArray4 } = require('./kernel-value/single-array4');
+
 const { WebGL2KernelValueUnsignedArray } = require('./kernel-value/unsigned-array');
 const { WebGL2KernelValueDynamicUnsignedArray } = require('./kernel-value/dynamic-unsigned-array');
 
@@ -16805,6 +26001,18 @@ const kernelValueMaps = {
       'Integer': WebGL2KernelValueInteger,
       'Float': WebGL2KernelValueFloat,
       'Array': WebGL2KernelValueDynamicUnsignedArray,
+      'Array(2)': false,
+      'Array(3)': false,
+      'Array(4)': false,
+      'Array1D(2)': false,
+      'Array1D(3)': false,
+      'Array1D(4)': false,
+      'Array2D(2)': false,
+      'Array2D(3)': false,
+      'Array2D(4)': false,
+      'Array3D(2)': false,
+      'Array3D(3)': false,
+      'Array3D(4)': false,
       'Input': WebGL2KernelValueDynamicUnsignedInput,
       'NumberTexture': WebGL2KernelValueDynamicNumberTexture,
       'ArrayTexture(1)': WebGL2KernelValueDynamicNumberTexture,
@@ -16813,13 +26021,26 @@ const kernelValueMaps = {
       'ArrayTexture(4)': WebGL2KernelValueDynamicNumberTexture,
       'MemoryOptimizedNumberTexture': WebGL2KernelValueDynamicMemoryOptimizedNumberTexture,
       'HTMLImage': WebGL2KernelValueDynamicHTMLImage,
-      'HTMLImageArray': WebGL2KernelValueDynamicHtmlImageArray,
+      'HTMLImageArray': WebGL2KernelValueDynamicHTMLImageArray,
+      'HTMLVideo': WebGL2KernelValueDynamicHTMLVideo,
     },
     static: {
       'Boolean': WebGL2KernelValueBoolean,
       'Float': WebGL2KernelValueFloat,
       'Integer': WebGL2KernelValueInteger,
       'Array': WebGL2KernelValueUnsignedArray,
+      'Array(2)': false,
+      'Array(3)': false,
+      'Array(4)': false,
+      'Array1D(2)': false,
+      'Array1D(3)': false,
+      'Array1D(4)': false,
+      'Array2D(2)': false,
+      'Array2D(3)': false,
+      'Array2D(4)': false,
+      'Array3D(2)': false,
+      'Array3D(3)': false,
+      'Array3D(4)': false,
       'Input': WebGL2KernelValueUnsignedInput,
       'NumberTexture': WebGL2KernelValueNumberTexture,
       'ArrayTexture(1)': WebGL2KernelValueNumberTexture,
@@ -16828,7 +26049,8 @@ const kernelValueMaps = {
       'ArrayTexture(4)': WebGL2KernelValueNumberTexture,
       'MemoryOptimizedNumberTexture': WebGL2KernelValueDynamicMemoryOptimizedNumberTexture,
       'HTMLImage': WebGL2KernelValueHTMLImage,
-      'HTMLImageArray': WebGL2KernelValueHtmlImageArray,
+      'HTMLImageArray': WebGL2KernelValueHTMLImageArray,
+      'HTMLVideo': WebGL2KernelValueHTMLVideo,
     }
   },
   single: {
@@ -16837,6 +26059,18 @@ const kernelValueMaps = {
       'Integer': WebGL2KernelValueInteger,
       'Float': WebGL2KernelValueFloat,
       'Array': WebGL2KernelValueDynamicSingleArray,
+      'Array(2)': WebGL2KernelValueSingleArray2,
+      'Array(3)': WebGL2KernelValueSingleArray3,
+      'Array(4)': WebGL2KernelValueSingleArray4,
+      'Array1D(2)': WebGL2KernelValueDynamicSingleArray1DI,
+      'Array1D(3)': WebGL2KernelValueDynamicSingleArray1DI,
+      'Array1D(4)': WebGL2KernelValueDynamicSingleArray1DI,
+      'Array2D(2)': WebGL2KernelValueDynamicSingleArray2DI,
+      'Array2D(3)': WebGL2KernelValueDynamicSingleArray2DI,
+      'Array2D(4)': WebGL2KernelValueDynamicSingleArray2DI,
+      'Array3D(2)': WebGL2KernelValueDynamicSingleArray3DI,
+      'Array3D(3)': WebGL2KernelValueDynamicSingleArray3DI,
+      'Array3D(4)': WebGL2KernelValueDynamicSingleArray3DI,
       'Input': WebGL2KernelValueDynamicSingleInput,
       'NumberTexture': WebGL2KernelValueDynamicNumberTexture,
       'ArrayTexture(1)': WebGL2KernelValueDynamicNumberTexture,
@@ -16845,13 +26079,26 @@ const kernelValueMaps = {
       'ArrayTexture(4)': WebGL2KernelValueDynamicNumberTexture,
       'MemoryOptimizedNumberTexture': WebGL2KernelValueDynamicMemoryOptimizedNumberTexture,
       'HTMLImage': WebGL2KernelValueDynamicHTMLImage,
-      'HTMLImageArray': WebGL2KernelValueDynamicHtmlImageArray,
+      'HTMLImageArray': WebGL2KernelValueDynamicHTMLImageArray,
+      'HTMLVideo': WebGL2KernelValueDynamicHTMLVideo,
     },
     static: {
       'Boolean': WebGL2KernelValueBoolean,
       'Float': WebGL2KernelValueFloat,
       'Integer': WebGL2KernelValueInteger,
       'Array': WebGL2KernelValueSingleArray,
+      'Array(2)': WebGL2KernelValueSingleArray2,
+      'Array(3)': WebGL2KernelValueSingleArray3,
+      'Array(4)': WebGL2KernelValueSingleArray4,
+      'Array1D(2)': WebGL2KernelValueSingleArray1DI,
+      'Array1D(3)': WebGL2KernelValueSingleArray1DI,
+      'Array1D(4)': WebGL2KernelValueSingleArray1DI,
+      'Array2D(2)': WebGL2KernelValueSingleArray2DI,
+      'Array2D(3)': WebGL2KernelValueSingleArray2DI,
+      'Array2D(4)': WebGL2KernelValueSingleArray2DI,
+      'Array3D(2)': WebGL2KernelValueSingleArray3DI,
+      'Array3D(3)': WebGL2KernelValueSingleArray3DI,
+      'Array3D(4)': WebGL2KernelValueSingleArray3DI,
       'Input': WebGL2KernelValueSingleInput,
       'NumberTexture': WebGL2KernelValueNumberTexture,
       'ArrayTexture(1)': WebGL2KernelValueNumberTexture,
@@ -16860,12 +26107,13 @@ const kernelValueMaps = {
       'ArrayTexture(4)': WebGL2KernelValueNumberTexture,
       'MemoryOptimizedNumberTexture': WebGL2KernelValueMemoryOptimizedNumberTexture,
       'HTMLImage': WebGL2KernelValueHTMLImage,
-      'HTMLImageArray': WebGL2KernelValueHtmlImageArray,
+      'HTMLImageArray': WebGL2KernelValueHTMLImageArray,
+      'HTMLVideo': WebGL2KernelValueHTMLVideo,
     }
   },
 };
 
-function lookupKernelValueType(type, dynamic, precision) {
+function lookupKernelValueType(type, dynamic, precision, value) {
   if (!type) {
     throw new Error('type missing');
   }
@@ -16874,6 +26122,9 @@ function lookupKernelValueType(type, dynamic, precision) {
   }
   if (!precision) {
     throw new Error('precision missing');
+  }
+  if (value.type) {
+    type = value.type;
   }
   const types = kernelValueMaps[precision][dynamic];
   if (types[type] === false) {
@@ -16885,9 +26136,10 @@ function lookupKernelValueType(type, dynamic, precision) {
 }
 
 module.exports = {
+  kernelValueMaps,
   lookupKernelValueType
 };
-},{"./kernel-value/boolean":62,"./kernel-value/dynamic-html-image":64,"./kernel-value/dynamic-html-image-array":63,"./kernel-value/dynamic-memory-optimized-number-texture":65,"./kernel-value/dynamic-number-texture":66,"./kernel-value/dynamic-single-array":67,"./kernel-value/dynamic-single-input":68,"./kernel-value/dynamic-unsigned-array":69,"./kernel-value/dynamic-unsigned-input":70,"./kernel-value/float":71,"./kernel-value/html-image":73,"./kernel-value/html-image-array":72,"./kernel-value/integer":74,"./kernel-value/memory-optimized-number-texture":75,"./kernel-value/number-texture":76,"./kernel-value/single-array":77,"./kernel-value/single-input":78,"./kernel-value/unsigned-array":79,"./kernel-value/unsigned-input":80}],62:[function(require,module,exports){
+},{"./kernel-value/boolean":112,"./kernel-value/dynamic-html-image":114,"./kernel-value/dynamic-html-image-array":113,"./kernel-value/dynamic-html-video":115,"./kernel-value/dynamic-memory-optimized-number-texture":116,"./kernel-value/dynamic-number-texture":117,"./kernel-value/dynamic-single-array":118,"./kernel-value/dynamic-single-array1d-i":119,"./kernel-value/dynamic-single-array2d-i":120,"./kernel-value/dynamic-single-array3d-i":121,"./kernel-value/dynamic-single-input":122,"./kernel-value/dynamic-unsigned-array":123,"./kernel-value/dynamic-unsigned-input":124,"./kernel-value/float":125,"./kernel-value/html-image":127,"./kernel-value/html-image-array":126,"./kernel-value/html-video":128,"./kernel-value/integer":129,"./kernel-value/memory-optimized-number-texture":130,"./kernel-value/number-texture":131,"./kernel-value/single-array":132,"./kernel-value/single-array1d-i":133,"./kernel-value/single-array2":134,"./kernel-value/single-array2d-i":135,"./kernel-value/single-array3":136,"./kernel-value/single-array3d-i":137,"./kernel-value/single-array4":138,"./kernel-value/single-input":139,"./kernel-value/unsigned-array":140,"./kernel-value/unsigned-input":141}],112:[function(require,module,exports){
 const { WebGLKernelValueBoolean } = require('../../web-gl/kernel-value/boolean');
 
 class WebGL2KernelValueBoolean extends WebGLKernelValueBoolean {}
@@ -16895,19 +26147,21 @@ class WebGL2KernelValueBoolean extends WebGLKernelValueBoolean {}
 module.exports = {
   WebGL2KernelValueBoolean
 };
-},{"../../web-gl/kernel-value/boolean":39}],63:[function(require,module,exports){
-const { WebGL2KernelValueHtmlImageArray } = require('./html-image-array');
+},{"../../web-gl/kernel-value/boolean":78}],113:[function(require,module,exports){
+const { WebGL2KernelValueHTMLImageArray } = require('./html-image-array');
 
-class WebGL2KernelValueDynamicHtmlImageArray extends WebGL2KernelValueHtmlImageArray {
+class WebGL2KernelValueDynamicHTMLImageArray extends WebGL2KernelValueHTMLImageArray {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2DArray ${this.id}`,
-      `uniform highp ivec2 ${this.sizeId}`,
-      `uniform highp ivec3 ${this.dimensionsId}`,
+      `uniform ${ variablePrecision } sampler2DArray ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
     ]);
   }
 
   updateValue(images) {
+    this.checkSize(images[0].width, images[0].height);
     this.dimensions = [images[0].width, images[0].height, images.length];
     this.textureSize = [images[0].width, images[0].height];
     this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
@@ -16917,18 +26171,19 @@ class WebGL2KernelValueDynamicHtmlImageArray extends WebGL2KernelValueHtmlImageA
 }
 
 module.exports = {
-  WebGL2KernelValueDynamicHtmlImageArray
+  WebGL2KernelValueDynamicHTMLImageArray
 };
-},{"./html-image-array":72}],64:[function(require,module,exports){
+},{"./html-image-array":126}],114:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueDynamicHTMLImage } = require('../../web-gl/kernel-value/dynamic-html-image');
 
 class WebGL2KernelValueDynamicHTMLImage extends WebGLKernelValueDynamicHTMLImage {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `uniform highp ivec2 ${this.sizeId}`,
-      `uniform highp ivec3 ${this.dimensionsId}`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
     ]);
   }
 }
@@ -16936,7 +26191,16 @@ class WebGL2KernelValueDynamicHTMLImage extends WebGLKernelValueDynamicHTMLImage
 module.exports = {
   WebGL2KernelValueDynamicHTMLImage
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/dynamic-html-image":40}],65:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/dynamic-html-image":79}],115:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGL2KernelValueDynamicHTMLImage } = require('./dynamic-html-image');
+
+class WebGL2KernelValueDynamicHTMLVideo extends WebGL2KernelValueDynamicHTMLImage {}
+
+module.exports = {
+  WebGL2KernelValueDynamicHTMLVideo
+};
+},{"../../../utils":150,"./dynamic-html-image":114}],116:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueDynamicMemoryOptimizedNumberTexture } = require('../../web-gl/kernel-value/dynamic-memory-optimized-number-texture');
 
@@ -16953,16 +26217,17 @@ class WebGL2KernelValueDynamicMemoryOptimizedNumberTexture extends WebGLKernelVa
 module.exports = {
   WebGL2KernelValueDynamicMemoryOptimizedNumberTexture
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/dynamic-memory-optimized-number-texture":41}],66:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/dynamic-memory-optimized-number-texture":81}],117:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueDynamicNumberTexture } = require('../../web-gl/kernel-value/dynamic-number-texture');
 
 class WebGL2KernelValueDynamicNumberTexture extends WebGLKernelValueDynamicNumberTexture {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `uniform highp ivec2 ${this.sizeId}`,
-      `uniform highp ivec3 ${this.dimensionsId}`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
     ]);
   }
 }
@@ -16970,16 +26235,17 @@ class WebGL2KernelValueDynamicNumberTexture extends WebGLKernelValueDynamicNumbe
 module.exports = {
   WebGL2KernelValueDynamicNumberTexture
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/dynamic-number-texture":42}],67:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/dynamic-number-texture":82}],118:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGL2KernelValueSingleArray } = require('../../web-gl2/kernel-value/single-array');
 
 class WebGL2KernelValueDynamicSingleArray extends WebGL2KernelValueSingleArray {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `uniform highp ivec2 ${this.sizeId}`,
-      `uniform highp ivec3 ${this.dimensionsId}`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
     ]);
   }
 
@@ -16987,6 +26253,7 @@ class WebGL2KernelValueDynamicSingleArray extends WebGL2KernelValueSingleArray {
     this.dimensions = utils.getDimensions(value, true);
     this.textureSize = utils.getMemoryOptimizedFloatTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
+    this.checkSize(this.textureSize[0] * this.bitRatio, this.textureSize[1] * this.bitRatio);
     this.uploadValue = new Float32Array(this.uploadArrayLength);
     this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
     this.kernel.setUniform2iv(this.sizeId, this.textureSize);
@@ -16997,16 +26264,92 @@ class WebGL2KernelValueDynamicSingleArray extends WebGL2KernelValueSingleArray {
 module.exports = {
   WebGL2KernelValueDynamicSingleArray
 };
-},{"../../../utils":89,"../../web-gl2/kernel-value/single-array":77}],68:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl2/kernel-value/single-array":132}],119:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGL2KernelValueSingleArray1DI } = require('../../web-gl2/kernel-value/single-array1d-i');
+
+class WebGL2KernelValueDynamicSingleArray1DI extends WebGL2KernelValueSingleArray1DI {
+  getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
+    return utils.linesToString([
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
+    ]);
+  }
+
+  updateValue(value) {
+    this.setShape(value);
+    this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
+    this.kernel.setUniform2iv(this.sizeId, this.textureSize);
+    super.updateValue(value);
+  }
+}
+
+module.exports = {
+  WebGL2KernelValueDynamicSingleArray1DI
+};
+},{"../../../utils":150,"../../web-gl2/kernel-value/single-array1d-i":133}],120:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGL2KernelValueSingleArray2DI } = require('../../web-gl2/kernel-value/single-array2d-i');
+
+class WebGL2KernelValueDynamicSingleArray2DI extends WebGL2KernelValueSingleArray2DI {
+  getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
+    return utils.linesToString([
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
+    ]);
+  }
+
+  updateValue(value) {
+    this.setShape(value);
+    this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
+    this.kernel.setUniform2iv(this.sizeId, this.textureSize);
+    super.updateValue(value);
+  }
+}
+
+module.exports = {
+  WebGL2KernelValueDynamicSingleArray2DI
+};
+},{"../../../utils":150,"../../web-gl2/kernel-value/single-array2d-i":135}],121:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGL2KernelValueSingleArray3DI } = require('../../web-gl2/kernel-value/single-array3d-i');
+
+class WebGL2KernelValueDynamicSingleArray3DI extends WebGL2KernelValueSingleArray3DI {
+  getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
+    return utils.linesToString([
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
+    ]);
+  }
+
+  updateValue(value) {
+    this.setShape(value);
+    this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
+    this.kernel.setUniform2iv(this.sizeId, this.textureSize);
+    super.updateValue(value);
+  }
+}
+
+module.exports = {
+  WebGL2KernelValueDynamicSingleArray3DI
+};
+},{"../../../utils":150,"../../web-gl2/kernel-value/single-array3d-i":137}],122:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGL2KernelValueSingleInput } = require('../../web-gl2/kernel-value/single-input');
 
 class WebGL2KernelValueDynamicSingleInput extends WebGL2KernelValueSingleInput {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `uniform highp ivec2 ${this.sizeId}`,
-      `uniform highp ivec3 ${this.dimensionsId}`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
     ]);
   }
 
@@ -17015,6 +26358,7 @@ class WebGL2KernelValueDynamicSingleInput extends WebGL2KernelValueSingleInput {
     this.dimensions = new Int32Array([w || 1, h || 1, d || 1]);
     this.textureSize = utils.getMemoryOptimizedFloatTextureSize(this.dimensions, this.bitRatio);
     this.uploadArrayLength = this.textureSize[0] * this.textureSize[1] * this.bitRatio;
+    this.checkSize(this.textureSize[0] * this.bitRatio, this.textureSize[1] * this.bitRatio);
     this.uploadValue = new Float32Array(this.uploadArrayLength);
     this.kernel.setUniform3iv(this.dimensionsId, this.dimensions);
     this.kernel.setUniform2iv(this.sizeId, this.textureSize);
@@ -17025,16 +26369,17 @@ class WebGL2KernelValueDynamicSingleInput extends WebGL2KernelValueSingleInput {
 module.exports = {
   WebGL2KernelValueDynamicSingleInput
 };
-},{"../../../utils":89,"../../web-gl2/kernel-value/single-input":78}],69:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl2/kernel-value/single-input":139}],123:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueDynamicUnsignedArray } = require('../../web-gl/kernel-value/dynamic-unsigned-array');
 
 class WebGL2KernelValueDynamicUnsignedArray extends WebGLKernelValueDynamicUnsignedArray {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `uniform highp ivec2 ${this.sizeId}`,
-      `uniform highp ivec3 ${this.dimensionsId}`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
     ]);
   }
 }
@@ -17042,16 +26387,17 @@ class WebGL2KernelValueDynamicUnsignedArray extends WebGLKernelValueDynamicUnsig
 module.exports = {
   WebGL2KernelValueDynamicUnsignedArray
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/dynamic-unsigned-array":45}],70:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/dynamic-unsigned-array":88}],124:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueDynamicUnsignedInput } = require('../../web-gl/kernel-value/dynamic-unsigned-input');
 
 class WebGL2KernelValueDynamicUnsignedInput extends WebGLKernelValueDynamicUnsignedInput {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `uniform highp ivec2 ${this.sizeId}`,
-      `uniform highp ivec3 ${this.dimensionsId}`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `uniform ${ variablePrecision } ivec2 ${this.sizeId}`,
+      `uniform ${ variablePrecision } ivec3 ${this.dimensionsId}`,
     ]);
   }
 }
@@ -17059,7 +26405,7 @@ class WebGL2KernelValueDynamicUnsignedInput extends WebGLKernelValueDynamicUnsig
 module.exports = {
   WebGL2KernelValueDynamicUnsignedInput
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/dynamic-unsigned-input":46}],71:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/dynamic-unsigned-input":89}],125:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueFloat } = require('../../web-gl/kernel-value/float');
 
@@ -17068,13 +26414,14 @@ class WebGL2KernelValueFloat extends WebGLKernelValueFloat {}
 module.exports = {
   WebGL2KernelValueFloat
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/float":47}],72:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/float":90}],126:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValue } = require('../../web-gl/kernel-value/index');
 
-class WebGL2KernelValueHtmlImageArray extends WebGLKernelValue {
+class WebGL2KernelValueHTMLImageArray extends WebGLKernelValue {
   constructor(value, settings) {
     super(value, settings);
+    this.checkSize(value[0].width, value[0].height);
     this.requestTexture();
     this.dimensions = [value[0].width, value[0].height, value.length];
     this.textureSize = [value[0].width, value[0].height];
@@ -17083,10 +26430,11 @@ class WebGL2KernelValueHtmlImageArray extends WebGLKernelValue {
     return `const uploadValue_${this.name} = ${this.varName};\n`;
   }
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2DArray ${this.id}`,
-      `highp ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
-      `highp ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+      `uniform ${ variablePrecision } sampler2DArray ${this.id}`,
+      `${ variablePrecision } ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `${ variablePrecision } ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
     ]);
   }
 
@@ -17133,19 +26481,19 @@ class WebGL2KernelValueHtmlImageArray extends WebGLKernelValue {
 }
 
 module.exports = {
-  WebGL2KernelValueHtmlImageArray
+  WebGL2KernelValueHTMLImageArray
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/index":49}],73:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/index":93}],127:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueHTMLImage } = require('../../web-gl/kernel-value/html-image');
 
 class WebGL2KernelValueHTMLImage extends WebGLKernelValueHTMLImage {
   getSource() {
-    // TODO: Do we really need highp?
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `highp ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
-      `highp ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `${ variablePrecision } ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `${ variablePrecision } ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
     ]);
   }
 }
@@ -17153,16 +26501,26 @@ class WebGL2KernelValueHTMLImage extends WebGLKernelValueHTMLImage {
 module.exports = {
   WebGL2KernelValueHTMLImage
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/html-image":48}],74:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/html-image":91}],128:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGL2KernelValueHTMLImage } = require('./html-image');
+
+class WebGL2KernelValueHTMLVideo extends WebGL2KernelValueHTMLImage {}
+
+module.exports = {
+  WebGL2KernelValueHTMLVideo
+};
+},{"../../../utils":150,"./html-image":127}],129:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueInteger } = require('../../web-gl/kernel-value/integer');
 
 class WebGL2KernelValueInteger extends WebGLKernelValueInteger {
   getSource(value) {
+    const variablePrecision = this.getVariablePrecisionString();
     if (this.origin === 'constants') {
-      return `const highp int ${this.id} = ${ parseInt(value) };\n`;
+      return `const ${ variablePrecision } int ${this.id} = ${ parseInt(value) };\n`;
     }
-    return `uniform highp int ${this.id};\n`;
+    return `uniform ${ variablePrecision } int ${this.id};\n`;
   }
 
   updateValue(value) {
@@ -17174,17 +26532,17 @@ class WebGL2KernelValueInteger extends WebGLKernelValueInteger {
 module.exports = {
   WebGL2KernelValueInteger
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/integer":50}],75:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/integer":94}],130:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueMemoryOptimizedNumberTexture } = require('../../web-gl/kernel-value/memory-optimized-number-texture');
 
 class WebGL2KernelValueMemoryOptimizedNumberTexture extends WebGLKernelValueMemoryOptimizedNumberTexture {
   getSource() {
-    //TODO: do we really need highp?
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
       `uniform sampler2D ${this.id}`,
-      `highp ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
-      `highp ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+      `${ variablePrecision } ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `${ variablePrecision } ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
     ]);
   }
 }
@@ -17192,17 +26550,17 @@ class WebGL2KernelValueMemoryOptimizedNumberTexture extends WebGLKernelValueMemo
 module.exports = {
   WebGL2KernelValueMemoryOptimizedNumberTexture
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/memory-optimized-number-texture":51}],76:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/memory-optimized-number-texture":95}],131:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueNumberTexture } = require('../../web-gl/kernel-value/number-texture');
 
 class WebGL2KernelValueNumberTexture extends WebGLKernelValueNumberTexture {
   getSource() {
-    //TODO: Do we really need highp?
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `highp ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
-      `highp ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `${ variablePrecision } ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `${ variablePrecision } ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
     ]);
   }
 }
@@ -17210,16 +26568,17 @@ class WebGL2KernelValueNumberTexture extends WebGLKernelValueNumberTexture {
 module.exports = {
   WebGL2KernelValueNumberTexture
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/number-texture":52}],77:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/number-texture":96}],132:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueSingleArray } = require('../../web-gl/kernel-value/single-array');
 
 class WebGL2KernelValueSingleArray extends WebGLKernelValueSingleArray {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `highp ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
-      `highp ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `${ variablePrecision } ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `${ variablePrecision } ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
     ]);
   }
 
@@ -17244,16 +26603,119 @@ class WebGL2KernelValueSingleArray extends WebGLKernelValueSingleArray {
 module.exports = {
   WebGL2KernelValueSingleArray
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/single-array":53}],78:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/single-array":97}],133:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValueSingleArray1DI } = require('../../web-gl/kernel-value/single-array1d-i');
+
+class WebGL2KernelValueSingleArray1DI extends WebGLKernelValueSingleArray1DI {
+  updateValue(value) {
+    if (value.constructor !== this.initialValueConstructor) {
+      this.onUpdateValueMismatch();
+      return;
+    }
+    const { context: gl } = this;
+    utils.flattenTo(value, this.uploadValue);
+    gl.activeTexture(this.contextHandle);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, this.textureSize[0], this.textureSize[1], 0, gl.RGBA, gl.FLOAT, this.uploadValue);
+    this.kernel.setUniform1i(this.id, this.index);
+  }
+}
+
+module.exports = {
+  WebGL2KernelValueSingleArray1DI
+};
+},{"../../../utils":150,"../../web-gl/kernel-value/single-array1d-i":98}],134:[function(require,module,exports){
+const { WebGLKernelValueSingleArray2 } = require('../../web-gl/kernel-value/single-array2');
+
+class WebGL2KernelValueSingleArray2 extends WebGLKernelValueSingleArray2 {}
+
+module.exports = {
+  WebGL2KernelValueSingleArray2
+};
+},{"../../web-gl/kernel-value/single-array2":99}],135:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValueSingleArray2DI } = require('../../web-gl/kernel-value/single-array2d-i');
+
+class WebGL2KernelValueSingleArray2DI extends WebGLKernelValueSingleArray2DI {
+  updateValue(value) {
+    if (value.constructor !== this.initialValueConstructor) {
+      this.onUpdateValueMismatch();
+      return;
+    }
+    const { context: gl } = this;
+    utils.flattenTo(value, this.uploadValue);
+    gl.activeTexture(this.contextHandle);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, this.textureSize[0], this.textureSize[1], 0, gl.RGBA, gl.FLOAT, this.uploadValue);
+    this.kernel.setUniform1i(this.id, this.index);
+  }
+}
+
+module.exports = {
+  WebGL2KernelValueSingleArray2DI
+};
+},{"../../../utils":150,"../../web-gl/kernel-value/single-array2d-i":100}],136:[function(require,module,exports){
+const { WebGLKernelValueSingleArray3 } = require('../../web-gl/kernel-value/single-array3');
+
+class WebGL2KernelValueSingleArray3 extends WebGLKernelValueSingleArray3 {}
+
+module.exports = {
+  WebGL2KernelValueSingleArray3
+};
+},{"../../web-gl/kernel-value/single-array3":101}],137:[function(require,module,exports){
+const { utils } = require('../../../utils');
+const { WebGLKernelValueSingleArray3DI } = require('../../web-gl/kernel-value/single-array3d-i');
+
+class WebGL2KernelValueSingleArray3DI extends WebGLKernelValueSingleArray3DI {
+  updateValue(value) {
+    if (value.constructor !== this.initialValueConstructor) {
+      this.onUpdateValueMismatch();
+      return;
+    }
+    const { context: gl } = this;
+    utils.flattenTo(value, this.uploadValue);
+    gl.activeTexture(this.contextHandle);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, this.textureSize[0], this.textureSize[1], 0, gl.RGBA, gl.FLOAT, this.uploadValue);
+    this.kernel.setUniform1i(this.id, this.index);
+  }
+}
+
+module.exports = {
+  WebGL2KernelValueSingleArray3DI
+};
+},{"../../../utils":150,"../../web-gl/kernel-value/single-array3d-i":102}],138:[function(require,module,exports){
+const { WebGLKernelValueSingleArray4 } = require('../../web-gl/kernel-value/single-array4');
+
+class WebGL2KernelValueSingleArray4 extends WebGLKernelValueSingleArray4 {}
+
+module.exports = {
+  WebGL2KernelValueSingleArray4
+};
+},{"../../web-gl/kernel-value/single-array4":103}],139:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueSingleInput } = require('../../web-gl/kernel-value/single-input');
 
 class WebGL2KernelValueSingleInput extends WebGLKernelValueSingleInput {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `highp ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
-      `highp ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `${ variablePrecision } ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `${ variablePrecision } ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
     ]);
   }
 
@@ -17274,16 +26736,17 @@ class WebGL2KernelValueSingleInput extends WebGLKernelValueSingleInput {
 module.exports = {
   WebGL2KernelValueSingleInput
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/single-input":54}],79:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/single-input":104}],140:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueUnsignedArray } = require('../../web-gl/kernel-value/unsigned-array');
 
 class WebGL2KernelValueUnsignedArray extends WebGLKernelValueUnsignedArray {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `highp ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
-      `highp ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `${ variablePrecision } ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `${ variablePrecision } ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
     ]);
   }
 }
@@ -17291,16 +26754,17 @@ class WebGL2KernelValueUnsignedArray extends WebGLKernelValueUnsignedArray {
 module.exports = {
   WebGL2KernelValueUnsignedArray
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/unsigned-array":55}],80:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/unsigned-array":105}],141:[function(require,module,exports){
 const { utils } = require('../../../utils');
 const { WebGLKernelValueUnsignedInput } = require('../../web-gl/kernel-value/unsigned-input');
 
 class WebGL2KernelValueUnsignedInput extends WebGLKernelValueUnsignedInput {
   getSource() {
+    const variablePrecision = this.getVariablePrecisionString();
     return utils.linesToString([
-      `uniform highp sampler2D ${this.id}`,
-      `highp ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
-      `highp ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
+      `uniform ${ variablePrecision } sampler2D ${this.id}`,
+      `${ variablePrecision } ivec2 ${this.sizeId} = ivec2(${this.textureSize[0]}, ${this.textureSize[1]})`,
+      `${ variablePrecision } ivec3 ${this.dimensionsId} = ivec3(${this.dimensions[0]}, ${this.dimensions[1]}, ${this.dimensions[2]})`,
     ]);
   }
 }
@@ -17308,7 +26772,7 @@ class WebGL2KernelValueUnsignedInput extends WebGLKernelValueUnsignedInput {
 module.exports = {
   WebGL2KernelValueUnsignedInput
 };
-},{"../../../utils":89,"../../web-gl/kernel-value/unsigned-input":56}],81:[function(require,module,exports){
+},{"../../../utils":150,"../../web-gl/kernel-value/unsigned-input":106}],142:[function(require,module,exports){
 const { WebGLKernel } = require('../web-gl/kernel');
 const { WebGL2FunctionNode } = require('./function-node');
 const { FunctionBuilder } = require('../function-builder');
@@ -17372,6 +26836,7 @@ class WebGL2Kernel extends WebGLKernel {
       kernelMap: true,
       isTextureFloat: true,
       channelCount: this.getChannelCount(),
+      maxTextureSize: this.getMaxTextureSize(),
     });
   }
 
@@ -17387,8 +26852,12 @@ class WebGL2Kernel extends WebGLKernel {
     return testContext.getParameter(testContext.MAX_DRAW_BUFFERS);
   }
 
-  static lookupKernelValueType(type, dynamic, precision) {
-    return lookupKernelValueType(type, dynamic, precision);
+  static getMaxTextureSize() {
+    return testContext.getParameter(testContext.MAX_TEXTURE_SIZE);
+  }
+
+  static lookupKernelValueType(type, dynamic, precision, value) {
+    return lookupKernelValueType(type, dynamic, precision, value);
   }
 
   static get testCanvas() {
@@ -17502,6 +26971,8 @@ class WebGL2Kernel extends WebGLKernel {
       optimizeFloatMemory: this.optimizeFloatMemory,
       precision: this.precision,
     }, this.output);
+
+    this.checkTextureSize();
   }
 
   translateSource() {
@@ -17538,8 +27009,8 @@ class WebGL2Kernel extends WebGLKernel {
     this.setUniform2f('ratio', texSize[0] / this.maxTexSize[0], texSize[1] / this.maxTexSize[1]);
 
     for (let i = 0; i < kernelArguments.length; i++) {
-      if (this.switchingKernels) return;
       kernelArguments[i].updateValue(arguments[i]);
+      if (this.switchingKernels) return;
     }
 
     if (this.plugins) {
@@ -17680,9 +27151,25 @@ class WebGL2Kernel extends WebGLKernel {
   _getTextureCoordinate() {
     const subKernels = this.subKernels;
     if (subKernels === null || subKernels.length < 1) {
-      return 'in highp vec2 vTexCoord;\n';
+      switch (this.tactic) {
+        case 'speed':
+          return 'in lowp vec2 vTexCoord;\n';
+        case 'performance':
+          return 'in highp vec2 vTexCoord;\n';
+        case 'balanced':
+        default:
+          return 'in mediump vec2 vTexCoord;\n';
+      }
     } else {
-      return 'out highp vec2 vTexCoord;\n';
+      switch (this.tactic) {
+        case 'speed':
+          return 'out lowp vec2 vTexCoord;\n';
+        case 'performance':
+          return 'out highp vec2 vTexCoord;\n';
+        case 'balanced':
+        default:
+          return 'out mediump vec2 vTexCoord;\n';
+      }
     }
   }
 
@@ -17950,34 +27437,6 @@ class WebGL2Kernel extends WebGLKernel {
     return result;
   }
 
-  /**
-   * @desc Get the fragment shader String.
-   * If the String hasn't been compiled yet,
-   * then this method compiles it as well
-   *
-   * @param {Array} args - The actual parameters sent to the Kernel
-   * @returns {string} Fragment Shader string
-   */
-  getFragmentShader(args) {
-    if (this.compiledFragmentShader !== null) {
-      return this.compiledFragmentShader;
-    }
-    return this.compiledFragmentShader = this.replaceArtifacts(this.constructor.fragmentShader, this._getFragShaderArtifactMap(args));
-  }
-
-  /**
-   * @desc Get the vertical shader String
-   * @param {Array} args - The actual parameters sent to the Kernel
-   * @returns {string} Vertical Shader string
-   *
-   */
-  getVertexShader(args) {
-    if (this.compiledVertexShader !== null) {
-      return this.compiledVertexShader;
-    }
-    return this.compiledVertexShader = this.constructor.vertexShader;
-  }
-
   destroyExtensions() {
     this.extensions.EXT_color_buffer_float = null;
     this.extensions.OES_texture_float_linear = null;
@@ -17993,11 +27452,12 @@ class WebGL2Kernel extends WebGLKernel {
 module.exports = {
   WebGL2Kernel
 };
-},{"../../utils":89,"../function-builder":9,"../web-gl/kernel":57,"./fragment-shader":59,"./function-node":60,"./kernel-value-maps":61,"./vertex-shader":82}],82:[function(require,module,exports){
+},{"../../utils":150,"../function-builder":48,"../web-gl/kernel":107,"./fragment-shader":109,"./function-node":110,"./kernel-value-maps":111,"./vertex-shader":143}],143:[function(require,module,exports){
+// language=GLSL
 const vertexShader = `#version 300 es
-precision highp float;
-precision highp int;
-precision highp sampler2D;
+__FLOAT_TACTIC_DECLARATION__;
+__INT_TACTIC_DECLARATION__;
+__SAMPLER_2D_TACTIC_DECLARATION__;
 
 in vec2 aPos;
 in vec2 aTexCoord;
@@ -18013,7 +27473,7 @@ void main(void) {
 module.exports = {
   vertexShader
 };
-},{}],83:[function(require,module,exports){
+},{}],144:[function(require,module,exports){
 const { gpuMock } = require('gpu-mock.js');
 const { utils } = require('./utils');
 const { CPUKernel } = require('./backend/cpu/kernel');
@@ -18127,11 +27587,12 @@ class GPU {
     this.canvas = settings.canvas || null;
     this.context = settings.context || null;
     this.mode = settings.mode;
-    if (this.mode === 'dev') return;
     this.Kernel = null;
     this.kernels = [];
     this.functions = [];
     this.nativeFunctions = [];
+    this.injectedNative = null;
+    if (this.mode === 'dev') return;
     this.chooseKernel();
     // add functions from settings
     if (settings.functions) {
@@ -18210,7 +27671,7 @@ class GPU {
    * @desc This creates a callable function object to call the kernel function with the argument parameter set
    * @param {Function|String|object} source - The calling to perform the conversion
    * @param {Object} [settings] - The parameter configuration object
-   * @returns {Kernel} callable function to run
+   * @return {Kernel} callable function to run
    */
   createKernel(source, settings) {
     if (typeof source === 'undefined') {
@@ -18221,7 +27682,9 @@ class GPU {
     }
 
     if (this.mode === 'dev') {
-      return gpuMock(source, upgradeDeprecatedCreateKernelSettings(settings));
+      const devKernel = gpuMock(source, upgradeDeprecatedCreateKernelSettings(settings));
+      this.kernels.push(devKernel);
+      return devKernel;
     }
 
     source = typeof source === 'function' ? source.toString() : source;
@@ -18231,101 +27694,132 @@ class GPU {
     if (settings && typeof settings.argumentTypes === 'object') {
       settingsCopy.argumentTypes = Object.keys(settings.argumentTypes).map(argumentName => settings.argumentTypes[argumentName]);
     }
+
+    function onRequestFallback(args) {
+      const fallbackKernel = new CPUKernel(source, {
+        argumentTypes: kernelRun.argumentTypes,
+        constantTypes: kernelRun.constantTypes,
+        graphical: kernelRun.graphical,
+        loopMaxIterations: kernelRun.loopMaxIterations,
+        constants: kernelRun.constants,
+        dynamicOutput: kernelRun.dynamicOutput,
+        dynamicArgument: kernelRun.dynamicArguments,
+        output: kernelRun.output,
+        precision: kernelRun.precision,
+        pipeline: kernelRun.pipeline,
+        immutable: kernelRun.immutable,
+        optimizeFloatMemory: kernelRun.optimizeFloatMemory,
+        fixIntegerDivisionAccuracy: kernelRun.fixIntegerDivisionAccuracy,
+        functions: kernelRun.functions,
+        nativeFunctions: kernelRun.nativeFunctions,
+        injectedNative: kernelRun.injectedNative,
+        subKernels: kernelRun.subKernels,
+        strictIntegers: kernelRun.strictIntegers,
+        debug: kernelRun.debug,
+        warnVarUsage: kernelRun.warnVarUsage,
+      });
+      fallbackKernel.build.apply(fallbackKernel, args);
+      const result = fallbackKernel.run.apply(fallbackKernel, args);
+      kernelRun.replaceKernel(fallbackKernel);
+      return result;
+    }
+
+    function onRequestSwitchKernel(args, kernel) {
+      const argumentTypes = new Array(args.length);
+      for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        const type = kernel.argumentTypes[i];
+        if (arg.type) {
+          argumentTypes[i] = arg.type;
+        } else {
+          switch (type) {
+            case 'Number':
+            case 'Integer':
+            case 'Float':
+            case 'ArrayTexture(1)':
+              argumentTypes[i] = utils.getVariableType(arg);
+              break;
+            default:
+              argumentTypes[i] = type;
+          }
+        }
+      }
+      const signature = argumentTypes.join(',');
+      const existingKernel = switchableKernels[signature];
+      if (existingKernel) {
+        existingKernel.run.apply(existingKernel, args);
+        if (existingKernel.renderKernels) {
+          return existingKernel.renderKernels();
+        } else {
+          return existingKernel.renderOutput();
+        }
+      }
+
+      const newKernel = switchableKernels[signature] = new kernel.constructor(source, {
+        argumentTypes,
+        constantTypes: kernel.constantTypes,
+        graphical: kernel.graphical,
+        loopMaxIterations: kernel.loopMaxIterations,
+        constants: kernel.constants,
+        dynamicOutput: kernel.dynamicOutput,
+        dynamicArgument: kernel.dynamicArguments,
+        context: kernel.context,
+        canvas: kernel.canvas,
+        output: kernel.output,
+        precision: kernel.precision,
+        pipeline: kernel.pipeline,
+        immutable: kernel.immutable,
+        optimizeFloatMemory: kernel.optimizeFloatMemory,
+        fixIntegerDivisionAccuracy: kernel.fixIntegerDivisionAccuracy,
+        functions: kernel.functions,
+        nativeFunctions: kernel.nativeFunctions,
+        injectedNative: kernel.injectedNative,
+        subKernels: kernel.subKernels,
+        strictIntegers: kernel.strictIntegers,
+        debug: kernel.debug,
+        gpu: kernel.gpu,
+        validate,
+        warnVarUsage: kernel.warnVarUsage,
+        returnType: kernel.returnType,
+        onRequestFallback,
+        onRequestSwitchKernel,
+      });
+      newKernel.build.apply(newKernel, args);
+      newKernel.run.apply(newKernel, args);
+      kernelRun.replaceKernel(newKernel);
+      if (newKernel.renderKernels) {
+        return newKernel.renderKernels();
+      } else {
+        return newKernel.renderOutput();
+      }
+    }
     const mergedSettings = Object.assign({
       context: this.context,
       canvas: this.canvas,
       functions: this.functions,
       nativeFunctions: this.nativeFunctions,
+      injectedNative: this.injectedNative,
       gpu: this,
       validate,
-      onRequestFallback: (args) => {
-        const fallbackKernel = new CPUKernel(source, {
-          graphical: kernel.graphical,
-          loopMaxIterations: kernel.loopMaxIterations,
-          constants: kernel.constants,
-          dynamicOutput: kernel.dynamicOutput,
-          dynamicArgument: kernel.dynamicArguments,
-          output: kernel.output,
-          precision: kernel.precision,
-          pipeline: kernel.pipeline,
-          immutable: kernel.immutable,
-          optimizeFloatMemory: kernel.optimizeFloatMemory,
-          fixIntegerDivisionAccuracy: kernel.fixIntegerDivisionAccuracy,
-          functions: kernel.functions,
-          nativeFunctions: kernel.nativeFunctions,
-          subKernels: kernel.subKernels,
-          strictIntegers: kernel.strictIntegers,
-          debug: kernel.debug,
-          warnVarUsage: kernel.warnVarUsage,
-        });
-        fallbackKernel.build.apply(fallbackKernel, args);
-        const result = fallbackKernel.run.apply(fallbackKernel, args);
-        kernel.replaceKernel(fallbackKernel);
-        return result;
-      },
-      onRequestSwitchKernel: (args, kernel) => {
-        const signatureArray = [];
-        for (let i = 0; i < args.length; i++) {
-          signatureArray.push(utils.getVariableType(args[i]));
-        }
-        const signature = signatureArray.join(',');
-        const existingKernel = switchableKernels[signature];
-        if (existingKernel) {
-          existingKernel.run.apply(existingKernel, args);
-          if (existingKernel.renderKernels) {
-            return existingKernel.renderKernels();
-          } else {
-            return existingKernel.renderOutput();
-          }
-        }
-        const newKernel = switchableKernels[signature] = new this.Kernel(source, {
-          graphical: kernel.graphical,
-          loopMaxIterations: kernel.loopMaxIterations,
-          constants: kernel.constants,
-          dynamicOutput: kernel.dynamicOutput,
-          dynamicArgument: kernel.dynamicArguments,
-          context: kernel.context,
-          canvas: kernel.canvas,
-          output: kernel.output,
-          precision: kernel.precision,
-          pipeline: kernel.pipeline,
-          immutable: kernel.immutable,
-          optimizeFloatMemory: kernel.optimizeFloatMemory,
-          fixIntegerDivisionAccuracy: kernel.fixIntegerDivisionAccuracy,
-          functions: kernel.functions,
-          nativeFunctions: kernel.nativeFunctions,
-          subKernels: kernel.subKernels,
-          strictIntegers: kernel.strictIntegers,
-          debug: kernel.debug,
-          gpu: this,
-          validate,
-          warnVarUsage: kernel.warnVarUsage,
-        });
-        newKernel.build.apply(newKernel, args);
-        newKernel.run.apply(newKernel, args);
-        if (newKernel.renderKernels) {
-          return newKernel.renderKernels();
-        } else {
-          return newKernel.renderOutput();
-        }
-      }
+      onRequestFallback,
+      onRequestSwitchKernel
     }, settingsCopy);
 
-    const kernel = kernelRunShortcut(new this.Kernel(source, mergedSettings));
+    const kernelRun = kernelRunShortcut(new this.Kernel(source, mergedSettings));
 
     //if canvas didn't come from this, propagate from kernel
     if (!this.canvas) {
-      this.canvas = kernel.canvas;
+      this.canvas = kernelRun.canvas;
     }
 
     //if context didn't come from this, propagate from kernel
     if (!this.context) {
-      this.context = kernel.context;
+      this.context = kernelRun.context;
     }
 
-    this.kernels.push(kernel);
+    this.kernels.push(kernelRun);
 
-    return kernel;
+    return kernelRun;
   }
 
   /**
@@ -18368,9 +27862,11 @@ class GPU {
       fn = arguments[arguments.length - 1];
     }
 
-    if (!this.Kernel.isSupported || !this.Kernel.features.kernelMap) {
-      if (this.mode && kernelTypes.indexOf(this.mode) < 0) {
-        throw new Error(`kernelMap not supported on ${this.Kernel.name}`);
+    if (this.mode !== 'dev') {
+      if (!this.Kernel.isSupported || !this.Kernel.features.kernelMap) {
+        if (this.mode && kernelTypes.indexOf(this.mode) < 0) {
+          throw new Error(`kernelMap not supported on ${this.Kernel.name}`);
+        }
       }
     }
 
@@ -18379,6 +27875,7 @@ class GPU {
     if (settings && typeof settings.argumentTypes === 'object') {
       settingsCopy.argumentTypes = Object.keys(settings.argumentTypes).map(argumentName => settings.argumentTypes[argumentName]);
     }
+
     if (Array.isArray(arguments[0])) {
       settingsCopy.subKernels = [];
       const functions = arguments[0];
@@ -18490,6 +27987,16 @@ class GPU {
   }
 
   /**
+   * Inject a string just before translated kernel functions
+   * @param {String} source
+   * @return {GPU}
+   */
+  injectNative(source) {
+    this.injectedNative = source;
+    return this;
+  }
+
+  /**
    * @desc Destroys all memory associated with gpu.js & the webGl if we created it
    */
   destroy() {
@@ -18500,7 +28007,17 @@ class GPU {
       for (let i = 0; i < this.kernels.length; i++) {
         this.kernels[i].destroy(true); // remove canvas if exists
       }
-      this.kernels[0].kernel.constructor.destroyContext(this.context);
+      // all kernels are associated with one context, go ahead and take care of it here
+      let firstKernel = this.kernels[0];
+      if (firstKernel) {
+        // if it is shortcut
+        if (firstKernel.kernel) {
+          firstKernel = firstKernel.kernel;
+        }
+        if (firstKernel.constructor.destroyContext) {
+          firstKernel.constructor.destroyContext(this.context);
+        }
+      }
     }, 0);
   }
 }
@@ -18536,7 +28053,7 @@ module.exports = {
   kernelOrder,
   kernelTypes
 };
-},{"./backend/cpu/kernel":8,"./backend/headless-gl/kernel":33,"./backend/web-gl/kernel":57,"./backend/web-gl2/kernel":81,"./kernel-run-shortcut":86,"./utils":89,"gpu-mock.js":3}],84:[function(require,module,exports){
+},{"./backend/cpu/kernel":47,"./backend/headless-gl/kernel":72,"./backend/web-gl/kernel":107,"./backend/web-gl2/kernel":142,"./kernel-run-shortcut":147,"./utils":150,"gpu-mock.js":42}],145:[function(require,module,exports){
 const { GPU } = require('./gpu');
 const { alias } = require('./alias');
 const { utils } = require('./utils');
@@ -18551,13 +28068,17 @@ const { HeadlessGLKernel } = require('./backend/headless-gl/kernel');
 
 const { WebGLFunctionNode } = require('./backend/web-gl/function-node');
 const { WebGLKernel } = require('./backend/web-gl/kernel');
+const { kernelValueMaps: webGLKernelValueMaps } = require('./backend/web-gl/kernel-value-maps');
 
 const { WebGL2FunctionNode } = require('./backend/web-gl2/function-node');
 const { WebGL2Kernel } = require('./backend/web-gl2/kernel');
+const { kernelValueMaps: webGL2KernelValueMaps } = require('./backend/web-gl2/kernel-value-maps');
 
 const { GLKernel } = require('./backend/gl/kernel');
 
 const { Kernel } = require('./backend/kernel');
+
+const { FunctionTracer } = require('./backend/function-tracer');
 
 module.exports = {
   alias,
@@ -18571,14 +28092,20 @@ module.exports = {
   input,
   Texture,
   utils,
+
   WebGL2FunctionNode,
   WebGL2Kernel,
+  webGL2KernelValueMaps,
+
   WebGLFunctionNode,
   WebGLKernel,
+  webGLKernelValueMaps,
+
   GLKernel,
   Kernel,
+  FunctionTracer,
 };
-},{"./alias":5,"./backend/cpu/function-node":6,"./backend/cpu/kernel":8,"./backend/function-builder":9,"./backend/function-node":10,"./backend/gl/kernel":13,"./backend/headless-gl/kernel":33,"./backend/kernel":35,"./backend/web-gl/function-node":37,"./backend/web-gl/kernel":57,"./backend/web-gl2/function-node":60,"./backend/web-gl2/kernel":81,"./gpu":83,"./input":85,"./texture":88,"./utils":89}],85:[function(require,module,exports){
+},{"./alias":44,"./backend/cpu/function-node":45,"./backend/cpu/kernel":47,"./backend/function-builder":48,"./backend/function-node":49,"./backend/function-tracer":50,"./backend/gl/kernel":52,"./backend/headless-gl/kernel":72,"./backend/kernel":74,"./backend/web-gl/function-node":76,"./backend/web-gl/kernel":107,"./backend/web-gl/kernel-value-maps":77,"./backend/web-gl2/function-node":110,"./backend/web-gl2/kernel":142,"./backend/web-gl2/kernel-value-maps":111,"./gpu":144,"./input":146,"./texture":149,"./utils":150}],146:[function(require,module,exports){
 class Input {
   constructor(value, size) {
     this.value = value;
@@ -18633,7 +28160,7 @@ module.exports = {
   Input,
   input
 };
-},{"./utils":89}],86:[function(require,module,exports){
+},{"./utils":150}],147:[function(require,module,exports){
 const { utils } = require('./utils');
 
 /**
@@ -18653,8 +28180,6 @@ function kernelRunShortcut(kernel) {
         }
         return kernel.renderKernels();
       };
-      kernel.run.apply(kernel, arguments);
-      return kernel.renderKernels();
     } else if (kernel.renderOutput) {
       run = function() {
         kernel.run.apply(kernel, arguments);
@@ -18664,14 +28189,12 @@ function kernelRunShortcut(kernel) {
         }
         return kernel.renderOutput();
       };
-      kernel.run.apply(kernel, arguments);
-      return kernel.renderOutput();
     } else {
       run = function() {
         return kernel.run.apply(kernel, arguments);
       };
-      return kernel.run.apply(kernel, arguments);
     }
+    return run.apply(kernel, arguments);
   };
   const shortcut = function() {
     return run.apply(kernel, arguments);
@@ -18733,7 +28256,7 @@ function bindKernelToShortcut(kernel, shortcut) {
 module.exports = {
   kernelRunShortcut
 };
-},{"./utils":89}],87:[function(require,module,exports){
+},{"./utils":150}],148:[function(require,module,exports){
 const source = `
 
 uniform highp float triangle_noise_seed;
@@ -18787,7 +28310,7 @@ module.exports = {
   functionReturnType,
   source
 };
-},{}],88:[function(require,module,exports){
+},{}],149:[function(require,module,exports){
 /**
  * @desc WebGl Texture implementation in JS
  * @param {ITextureSettings} settings
@@ -18832,7 +28355,7 @@ class Texture {
 module.exports = {
   Texture
 };
-},{}],89:[function(require,module,exports){
+},{}],150:[function(require,module,exports){
 const acorn = require('acorn');
 const { Input } = require('./input');
 const { Texture } = require('./texture');
@@ -18974,17 +28497,17 @@ const utils = {
       case Input:
         return 'Input';
     }
-
-    if (value.nodeName === 'IMG') {
-      return 'HTMLImage';
-    } else {
-      if (value.hasOwnProperty('type')) {
-        return value.type;
-      }
-      return 'Unknown';
+    switch (value.nodeName) {
+      case 'IMG':
+        return 'HTMLImage';
+      case 'VIDEO':
+        return 'HTMLVideo';
     }
+    if (value.hasOwnProperty('type')) {
+      return value.type;
+    }
+    return 'Unknown';
   },
-
 
   getKernelTextureSize(settings, dimensions) {
     let [w, h, d] = dimensions;
@@ -19023,8 +28546,7 @@ const utils = {
    * @returns {TextureDimensions}
    */
   getMemoryOptimizedFloatTextureSize(dimensions, bitRatio) {
-    const [w, h, d] = dimensions;
-    const totalArea = utils.roundTo((w || 1) * (h || 1) * (d || 1), 4);
+    const totalArea = utils.roundTo((dimensions[0] || 1) * (dimensions[1] || 1) * (dimensions[2] || 1) * (dimensions[3] || 1), 4);
     const texelCount = totalArea / bitRatio;
     return utils.closestSquareDimensions(texelCount);
   },
@@ -19108,6 +28630,23 @@ const utils = {
   },
 
   /**
+   * Puts a nested 4d array into a one-dimensional target array
+   * @param {Array|*} array
+   * @param {Float32Array|Float64Array} target
+   */
+  flatten4dArrayTo(array, target) {
+    let offset = 0;
+    for (let l = 0; l < array.length; l++) {
+      for (let z = 0; z < array[l].length; z++) {
+        for (let y = 0; y < array[l][z].length; y++) {
+          target.set(array[l][z][y], offset);
+          offset += array[l][z][y].length;
+        }
+      }
+    }
+  },
+
+  /**
    * Puts a nested 1d, 2d, or 3d array into a one-dimensional target array
    * @param {Float32Array|Uint16Array|Uint8Array} array
    * @param {Float32Array} target
@@ -19115,7 +28654,11 @@ const utils = {
   flattenTo(array, target) {
     if (utils.isArray(array[0])) {
       if (utils.isArray(array[0][0])) {
-        utils.flatten3dArrayTo(array, target);
+        if (utils.isArray(array[0][0][0])) {
+          utils.flatten4dArrayTo(array, target);
+        } else {
+          utils.flatten3dArrayTo(array, target);
+        }
       } else {
         utils.flatten2dArrayTo(array, target);
       }
@@ -19603,6 +29146,107 @@ const utils = {
       return flattenedFunctionDependencies.join('') + result;
     }
     return result;
+  },
+
+  splitHTMLImageToRGB: (image, mode) => {
+    const gpu = new GPU({ mode });
+
+    const rKernel = gpu.createKernel(function(a) {
+      const pixel = a[this.thread.y][this.thread.x];
+      return pixel.r * 255;
+    }, {
+      output: [image.width, image.height],
+      precision: 'unsigned',
+      argumentTypes: ['HTMLImage'],
+    });
+    const gKernel = gpu.createKernel(function(a) {
+      const pixel = a[this.thread.y][this.thread.x];
+      return pixel.g * 255;
+    }, {
+      output: [image.width, image.height],
+      precision: 'unsigned',
+      argumentTypes: ['HTMLImage'],
+    });
+    const bKernel = gpu.createKernel(function(a) {
+      const pixel = a[this.thread.y][this.thread.x];
+      return pixel.b * 255;
+    }, {
+      output: [image.width, image.height],
+      precision: 'unsigned',
+      argumentTypes: ['HTMLImage'],
+    });
+    const aKernel = gpu.createKernel(function(a) {
+      const pixel = a[this.thread.y][this.thread.x];
+      return pixel.a * 255;
+    }, {
+      output: [image.width, image.height],
+      precision: 'unsigned',
+      argumentTypes: ['HTMLImage'],
+    });
+    const result = [
+      rKernel(image),
+      gKernel(image),
+      bKernel(image),
+      aKernel(image),
+    ];
+    result.rKernel = rKernel;
+    result.gKernel = gKernel;
+    result.bKernel = bKernel;
+    result.aKernel = aKernel;
+    result.gpu = gpu;
+    return result;
+  },
+
+  /**
+   * A visual debug utility
+   * @param rgba
+   * @param width
+   * @param height
+   * @param mode
+   * @return {Object[]}
+   */
+  splitRGBAToCanvases: (rgba, width, height, mode) => {
+    const { GPU } = require('./gpu.js');
+
+    const visualGPUR = new GPU({ mode });
+    const visualKernelR = visualGPUR.createKernel(function(v) {
+      const pixel = v[this.thread.y][this.thread.x];
+      this.color(pixel.r / 255, 0, 0, 255);
+    }, { output: [width, height], graphical: true, argumentTypes: { v: 'Array2D(4)' } });
+    visualKernelR(rgba);
+
+    const visualGPUG = new GPU({ mode });
+    const visualKernelG = visualGPUG.createKernel(function(v) {
+      const pixel = v[this.thread.y][this.thread.x];
+      this.color(0, pixel.g / 255, 0, 255);
+    }, { output: [width, height], graphical: true, argumentTypes: { v: 'Array2D(4)' } });
+    visualKernelG(rgba);
+
+    const visualGPUB = new GPU({ mode });
+    const visualKernelB = visualGPUB.createKernel(function(v) {
+      const pixel = v[this.thread.y][this.thread.x];
+      this.color(0, 0, pixel.b / 255, 255);
+    }, { output: [width, height], graphical: true, argumentTypes: { v: 'Array2D(4)' } });
+    visualKernelB(rgba);
+
+    const visualGPUA = new GPU({ mode });
+    const visualKernelA = visualGPUA.createKernel(function(v) {
+      const pixel = v[this.thread.y][this.thread.x];
+      this.color(255, 255, 255, pixel.a / 255);
+    }, { output: [width, height], graphical: true, argumentTypes: { v: 'Array2D(4)' } });
+    visualKernelA(rgba);
+
+    visualGPUR.destroy();
+    visualGPUG.destroy();
+    visualGPUB.destroy();
+    visualGPUA.destroy();
+
+    return [
+      visualKernelR.canvas,
+      visualKernelG.canvas,
+      visualKernelB.canvas,
+      visualKernelA.canvas,
+    ];
   }
 };
 
@@ -19611,7 +29255,399 @@ const _systemEndianness = utils.getSystemEndianness();
 module.exports = {
   utils
 };
-},{"./input":85,"./texture":88,"acorn":4}],90:[function(require,module,exports){
+},{"./gpu.js":144,"./input":146,"./texture":149,"acorn":43}],151:[function(require,module,exports){
+exports.read = function (buffer, offset, isLE, mLen, nBytes) {
+  var e, m
+  var eLen = (nBytes * 8) - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var nBits = -7
+  var i = isLE ? (nBytes - 1) : 0
+  var d = isLE ? -1 : 1
+  var s = buffer[offset + i]
+
+  i += d
+
+  e = s & ((1 << (-nBits)) - 1)
+  s >>= (-nBits)
+  nBits += eLen
+  for (; nBits > 0; e = (e * 256) + buffer[offset + i], i += d, nBits -= 8) {}
+
+  m = e & ((1 << (-nBits)) - 1)
+  e >>= (-nBits)
+  nBits += mLen
+  for (; nBits > 0; m = (m * 256) + buffer[offset + i], i += d, nBits -= 8) {}
+
+  if (e === 0) {
+    e = 1 - eBias
+  } else if (e === eMax) {
+    return m ? NaN : ((s ? -1 : 1) * Infinity)
+  } else {
+    m = m + Math.pow(2, mLen)
+    e = e - eBias
+  }
+  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
+}
+
+exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
+  var e, m, c
+  var eLen = (nBytes * 8) - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
+  var i = isLE ? 0 : (nBytes - 1)
+  var d = isLE ? 1 : -1
+  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
+
+  value = Math.abs(value)
+
+  if (isNaN(value) || value === Infinity) {
+    m = isNaN(value) ? 1 : 0
+    e = eMax
+  } else {
+    e = Math.floor(Math.log(value) / Math.LN2)
+    if (value * (c = Math.pow(2, -e)) < 1) {
+      e--
+      c *= 2
+    }
+    if (e + eBias >= 1) {
+      value += rt / c
+    } else {
+      value += rt * Math.pow(2, 1 - eBias)
+    }
+    if (value * c >= 2) {
+      e++
+      c /= 2
+    }
+
+    if (e + eBias >= eMax) {
+      m = 0
+      e = eMax
+    } else if (e + eBias >= 1) {
+      m = ((value * c) - 1) * Math.pow(2, mLen)
+      e = e + eBias
+    } else {
+      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
+      e = 0
+    }
+  }
+
+  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
+
+  e = (e << mLen) | m
+  eLen += mLen
+  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
+
+  buffer[offset + i - d] |= s * 128
+}
+
+},{}],152:[function(require,module,exports){
+(function (process){
+// .dirname, .basename, and .extname methods are extracted from Node.js v8.11.1,
+// backported and transplited with Babel, with backwards-compat fixes
+
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// resolves . and .. elements in a path array with directory names there
+// must be no slashes, empty elements, or device names (c:\) in the array
+// (so also no leading and trailing slashes - it does not distinguish
+// relative and absolute paths)
+function normalizeArray(parts, allowAboveRoot) {
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = parts.length - 1; i >= 0; i--) {
+    var last = parts[i];
+    if (last === '.') {
+      parts.splice(i, 1);
+    } else if (last === '..') {
+      parts.splice(i, 1);
+      up++;
+    } else if (up) {
+      parts.splice(i, 1);
+      up--;
+    }
+  }
+
+  // if the path is allowed to go above the root, restore leading ..s
+  if (allowAboveRoot) {
+    for (; up--; up) {
+      parts.unshift('..');
+    }
+  }
+
+  return parts;
+}
+
+// path.resolve([from ...], to)
+// posix version
+exports.resolve = function() {
+  var resolvedPath = '',
+      resolvedAbsolute = false;
+
+  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+    var path = (i >= 0) ? arguments[i] : process.cwd();
+
+    // Skip empty and invalid entries
+    if (typeof path !== 'string') {
+      throw new TypeError('Arguments to path.resolve must be strings');
+    } else if (!path) {
+      continue;
+    }
+
+    resolvedPath = path + '/' + resolvedPath;
+    resolvedAbsolute = path.charAt(0) === '/';
+  }
+
+  // At this point the path should be resolved to a full absolute path, but
+  // handle relative paths to be safe (might happen when process.cwd() fails)
+
+  // Normalize the path
+  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
+    return !!p;
+  }), !resolvedAbsolute).join('/');
+
+  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
+};
+
+// path.normalize(path)
+// posix version
+exports.normalize = function(path) {
+  var isAbsolute = exports.isAbsolute(path),
+      trailingSlash = substr(path, -1) === '/';
+
+  // Normalize the path
+  path = normalizeArray(filter(path.split('/'), function(p) {
+    return !!p;
+  }), !isAbsolute).join('/');
+
+  if (!path && !isAbsolute) {
+    path = '.';
+  }
+  if (path && trailingSlash) {
+    path += '/';
+  }
+
+  return (isAbsolute ? '/' : '') + path;
+};
+
+// posix version
+exports.isAbsolute = function(path) {
+  return path.charAt(0) === '/';
+};
+
+// posix version
+exports.join = function() {
+  var paths = Array.prototype.slice.call(arguments, 0);
+  return exports.normalize(filter(paths, function(p, index) {
+    if (typeof p !== 'string') {
+      throw new TypeError('Arguments to path.join must be strings');
+    }
+    return p;
+  }).join('/'));
+};
+
+
+// path.relative(from, to)
+// posix version
+exports.relative = function(from, to) {
+  from = exports.resolve(from).substr(1);
+  to = exports.resolve(to).substr(1);
+
+  function trim(arr) {
+    var start = 0;
+    for (; start < arr.length; start++) {
+      if (arr[start] !== '') break;
+    }
+
+    var end = arr.length - 1;
+    for (; end >= 0; end--) {
+      if (arr[end] !== '') break;
+    }
+
+    if (start > end) return [];
+    return arr.slice(start, end - start + 1);
+  }
+
+  var fromParts = trim(from.split('/'));
+  var toParts = trim(to.split('/'));
+
+  var length = Math.min(fromParts.length, toParts.length);
+  var samePartsLength = length;
+  for (var i = 0; i < length; i++) {
+    if (fromParts[i] !== toParts[i]) {
+      samePartsLength = i;
+      break;
+    }
+  }
+
+  var outputParts = [];
+  for (var i = samePartsLength; i < fromParts.length; i++) {
+    outputParts.push('..');
+  }
+
+  outputParts = outputParts.concat(toParts.slice(samePartsLength));
+
+  return outputParts.join('/');
+};
+
+exports.sep = '/';
+exports.delimiter = ':';
+
+exports.dirname = function (path) {
+  if (typeof path !== 'string') path = path + '';
+  if (path.length === 0) return '.';
+  var code = path.charCodeAt(0);
+  var hasRoot = code === 47 /*/*/;
+  var end = -1;
+  var matchedSlash = true;
+  for (var i = path.length - 1; i >= 1; --i) {
+    code = path.charCodeAt(i);
+    if (code === 47 /*/*/) {
+        if (!matchedSlash) {
+          end = i;
+          break;
+        }
+      } else {
+      // We saw the first non-path separator
+      matchedSlash = false;
+    }
+  }
+
+  if (end === -1) return hasRoot ? '/' : '.';
+  if (hasRoot && end === 1) {
+    // return '//';
+    // Backwards-compat fix:
+    return '/';
+  }
+  return path.slice(0, end);
+};
+
+function basename(path) {
+  if (typeof path !== 'string') path = path + '';
+
+  var start = 0;
+  var end = -1;
+  var matchedSlash = true;
+  var i;
+
+  for (i = path.length - 1; i >= 0; --i) {
+    if (path.charCodeAt(i) === 47 /*/*/) {
+        // If we reached a path separator that was not part of a set of path
+        // separators at the end of the string, stop now
+        if (!matchedSlash) {
+          start = i + 1;
+          break;
+        }
+      } else if (end === -1) {
+      // We saw the first non-path separator, mark this as the end of our
+      // path component
+      matchedSlash = false;
+      end = i + 1;
+    }
+  }
+
+  if (end === -1) return '';
+  return path.slice(start, end);
+}
+
+// Uses a mixed approach for backwards-compatibility, as ext behavior changed
+// in new Node.js versions, so only basename() above is backported here
+exports.basename = function (path, ext) {
+  var f = basename(path);
+  if (ext && f.substr(-1 * ext.length) === ext) {
+    f = f.substr(0, f.length - ext.length);
+  }
+  return f;
+};
+
+exports.extname = function (path) {
+  if (typeof path !== 'string') path = path + '';
+  var startDot = -1;
+  var startPart = 0;
+  var end = -1;
+  var matchedSlash = true;
+  // Track the state of characters (if any) we see before our first dot and
+  // after any path separator we find
+  var preDotState = 0;
+  for (var i = path.length - 1; i >= 0; --i) {
+    var code = path.charCodeAt(i);
+    if (code === 47 /*/*/) {
+        // If we reached a path separator that was not part of a set of path
+        // separators at the end of the string, stop now
+        if (!matchedSlash) {
+          startPart = i + 1;
+          break;
+        }
+        continue;
+      }
+    if (end === -1) {
+      // We saw the first non-path separator, mark this as the end of our
+      // extension
+      matchedSlash = false;
+      end = i + 1;
+    }
+    if (code === 46 /*.*/) {
+        // If this is our first dot, mark it as the start of our extension
+        if (startDot === -1)
+          startDot = i;
+        else if (preDotState !== 1)
+          preDotState = 1;
+    } else if (startDot !== -1) {
+      // We saw a non-dot and non-path separator before our dot, so we should
+      // have a good chance at having a non-empty extension
+      preDotState = -1;
+    }
+  }
+
+  if (startDot === -1 || end === -1 ||
+      // We saw a non-dot character immediately before the dot
+      preDotState === 0 ||
+      // The (right-most) trimmed path component is exactly '..'
+      preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+    return '';
+  }
+  return path.slice(startDot, end);
+};
+
+function filter (xs, f) {
+    if (xs.filter) return xs.filter(f);
+    var res = [];
+    for (var i = 0; i < xs.length; i++) {
+        if (f(xs[i], i, xs)) res.push(xs[i]);
+    }
+    return res;
+}
+
+// String.prototype.substr - negative index don't work in IE8
+var substr = 'ab'.substr(-1) === 'b'
+    ? function (str, start, len) { return str.substr(start, len) }
+    : function (str, start, len) {
+        if (start < 0) start = str.length + start;
+        return str.substr(start, len);
+    }
+;
+
+}).call(this,require('_process'))
+},{"_process":154}],153:[function(require,module,exports){
 (function (process){
 // Generated by CoffeeScript 1.12.2
 (function() {
@@ -19651,7 +29687,7 @@ module.exports = {
 
 
 }).call(this,require('_process'))
-},{"_process":91}],91:[function(require,module,exports){
+},{"_process":154}],154:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -19837,7 +29873,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],92:[function(require,module,exports){
+},{}],155:[function(require,module,exports){
 const kernel = [
   [1, 2, 1],
   [2, 1, 2],
@@ -19888,7 +29924,7 @@ const matConvFunc = `function (array, kernel) {
  * @param {"GPU"} gpu A GPU.js GPU object.
  * @param {"GPU"} cpu A GPU.js object with mode=cpu
  * @param {Float32Array|"Object"} output The output size
- * @returns {"Object"}
+ * @returns {{gpu: Object, pipe: Object, cpu: Object}}
  */
 const generateFuncs = (gpu, cpu, output) => {
   return {
@@ -19916,7 +29952,13 @@ module.exports = {
   generateFuncs
 }
 
-},{}],93:[function(require,module,exports){
+},{}],156:[function(require,module,exports){
+/**
+ * @method generateMatrices
+ * @description generates 5 matrices of uniform x and y length
+ * @param size size of the matrices
+ * @returns {Float32Array}
+ */
 module.exports = size => {
   const matrices = [[], [], [], [], []];
 
@@ -19937,7 +29979,7 @@ module.exports = size => {
   return matrices;
 }
 
-},{}],94:[function(require,module,exports){
+},{}],157:[function(require,module,exports){
 const matMultFunc = `function(a, b) {
   let sum = 0;
   for (let i = 0; i < this.output.x; i++) {
@@ -19973,7 +30015,7 @@ module.exports = {
   generateFuncs,
   matMultFunc
 }
-},{}],95:[function(require,module,exports){
+},{}],158:[function(require,module,exports){
 module.exports = {
   RED_UNDER: '\033[1;31;4m', // underlined red
   RED_NO_UNDER: '\033[1;31m', // red without underline
@@ -19985,38 +30027,44 @@ module.exports = {
   RED_FLASH: '\033[1;31;5m', // flashing/blinking red text
   NC: '\033[0m' // no color(default)
 }
-},{}],96:[function(require,module,exports){
+},{}],159:[function(require,module,exports){
+/**
+ * @method br
+ * @description Adds a line break in the console
+ * @param numBreaks Number of line breaks to add. (Default 2)
+ * @returns {Null}
+ */
+const br = (numBreaks = 1) => {for(let br = 0; br < numBreaks; br++) {console.log(``)}}
+
+module.exports = {
+  br
+}
+},{}],160:[function(require,module,exports){
 const { GPU } = require('gpu.js'),
   run = require('./run'),
-  getScore = require('./stats/getScore');
+  BenchmarkOut = require('./util/benchmark-out'),
+  getDefaultOptions = require('./util/get-default-options'),
+  multipleBenchmark = require('./util/multi-bench');
 
 /**
  * @method benchmark
  * @description benchmarks gpu.js
- * @param {"Object"} options Optional options
+ * @param {...Options} options Optional options
  */
 const benchmark = (options = {}) => {
-  options.num_benchmarks = options.num_benchmarks || 1;
 
-  options.matrix_size = options.matrix_size || 512;
-  options.output = [options.matrix_size, options.matrix_size];
-
-  options.logs = typeof options.logs != 'undefined' ? options.logs : true;
-  options.cpu_benchmark = typeof options.cpu_benchmark != 'undefined' ? options.cpu_benchmark : true;
-
-  options.gpu = options.gpu || new GPU({mode: 'gpu'});
-  options.cpu = options.cpu || new GPU({mode: 'cpu'});
-
-  const out = run(options);
-
-  out.score = getScore(out, options.matrix_size);
+  options = getDefaultOptions(options);
+  const out = new BenchmarkOut(true, run(options));
 
   return out;
 }
 
-module.exports = benchmark;
+module.exports = {
+  benchmark,
+  multipleBenchmark
+}
 
-},{"./run":97,"./stats/getScore":99,"gpu.js":84}],97:[function(require,module,exports){
+},{"./run":161,"./util/benchmark-out":166,"./util/get-default-options":168,"./util/multi-bench":171,"gpu.js":145}],161:[function(require,module,exports){
 const benchIt = require('./util/bench-it'),
   generateMatrices = require('./benches/generate-matrices'),
   getMinMaxAvg = require('./util/get-min-max'),
@@ -20024,8 +30072,9 @@ const benchIt = require('./util/bench-it'),
   matConv = require('./benches/convolution'),
   { paddificate, paddingX, paddingY, kernel } = require('./benches/convolution'),
   { YELLOW_UNDER, GREEN_NO_UNDER, NC } = require('./cli/colors'),
-  { generateStatsObj: generateStats } = require('./stats/getStats'),
-  getgetTextureKernel = require('./util/get-texture');
+  { generateStatsObj: generateStats } = require('./stats/get-stats'),
+  getgetTextureKernel = require('./util/get-texture'),
+  getScore = require('./stats/get-score');
 
 /**
  * @method run
@@ -20033,6 +30082,7 @@ const benchIt = require('./util/bench-it'),
  * @return {"Object"}
  */
 const run = options => {
+  options.output = [options.matrix_size, options.matrix_size];
   
   const getTexture = getgetTextureKernel(options.gpu, options.matrix_size, options.matrix_size);
 
@@ -20131,6 +30181,8 @@ const run = options => {
 
     stats,
 
+    score: getScore(run_time, options.matrix_size),
+
     options
   }
 
@@ -20139,22 +30191,22 @@ const run = options => {
 
 module.exports = run;
 
-},{"./benches/convolution":92,"./benches/generate-matrices":93,"./benches/matrix-multiplication":94,"./cli/colors":95,"./stats/getStats":100,"./util/bench-it":101,"./util/get-min-max":102,"./util/get-texture":103}],98:[function(require,module,exports){
+},{"./benches/convolution":155,"./benches/generate-matrices":156,"./benches/matrix-multiplication":157,"./cli/colors":158,"./stats/get-score":163,"./stats/get-stats":164,"./util/bench-it":165,"./util/get-min-max":169,"./util/get-texture":170}],162:[function(require,module,exports){
 const getDiff = (val1, val2) => Math.floor(((val2 - val1) / val2) * 10000) / 100;
 
 module.exports = (val1, val2) => val1 < val2 ? {diff: getDiff(val1, val2), greater: 0} : {diff: getDiff(val2, val1), greater: 1};
-},{}],99:[function(require,module,exports){
-const getScore = (data, matrix_size) => {
+},{}],163:[function(require,module,exports){
+const getScore = (run_time, matrix_size) => {
   const score = {
-    gpu: Math.floor((matrix_size / data.run_time.mat_mult.gpu.avg) * 1000),
-    cpu: Math.floor((matrix_size / data.run_time.mat_mult.cpu.avg) * 1000)
+    gpu: Math.floor((matrix_size / run_time.mat_mult.gpu.avg) * 1000),
+    cpu: Math.floor((matrix_size / run_time.mat_mult.cpu.avg) * 1000)
   }
 
   return score;
 }
 
 module.exports = getScore;
-},{}],100:[function(require,module,exports){
+},{}],164:[function(require,module,exports){
 const getDiff = require('./diff');
 const formatDiff = (diff, contenders) => {
   if (diff.diff >= 100){
@@ -20314,8 +30366,13 @@ module.exports = {
   generateStatsObj,
   formatDiff,
 }
-},{"./diff":98}],101:[function(require,module,exports){
+},{"./diff":162}],165:[function(require,module,exports){
 const now = require('performance-now');
+/**
+ * @method benchIt
+ * @param {Function} func the function to be run
+ * @returns {{ret: *, time: Number}}
+ */
 module.exports = func => {
 
   let time = now() * (-1);
@@ -20330,7 +30387,277 @@ module.exports = func => {
   }
 }
 
-},{"performance-now":90}],102:[function(require,module,exports){
+},{"performance-now":153}],166:[function(require,module,exports){
+const { getPlotlyJSON: convertToPlotlyJSON, getChartistJSON: convertToChartistJSON } = require('./export-as-json');
+
+class BenchmarkOut {
+  /**
+   * @param {Boolean} [singleData] whether only a single data object is to be stored
+   * @param {*} [initData] initialData
+   * @returns {null}
+   */
+  constructor(singleData = false, initData) {
+    this.singleData = singleData;
+
+    if (singleData) {
+      this.data = initData;
+    }
+    else {
+      this.data = [];
+      if (initData){
+        this.data.push(initData)
+      }
+    }
+  }
+
+  /**
+   * @method addData
+   * @param {Object} newData new data object to be added to a multi-data array
+   * @returns {null}
+   */
+  addData(newData) {
+    if (!this.singleData) {
+      this.data.push(newData)
+    }
+    else throw "Single Data"
+  }
+
+  /**
+   * @method setDataField
+   * @param {String} field the field name
+   * @param {*} value the field value
+   * @param {Number} [index=0] index of the data object in the multi-data array
+   * @returns {null}
+   */
+  setDataField(field, value, index = 0) {
+    if (this.singleData) {
+      this.data[field] = value;
+    }
+    else {
+      this.data[index][field] = value;
+    }
+  }
+
+  /**
+   * @method getDataField
+   * @param {String} field the field name
+   * @param {Number} [index=0] index of the data object in the multi-data array
+   * @returns {*}
+   */
+  getDataField(field, index = 0) {
+    if (this.singleData) {
+      return this.data[field];
+    }
+    else {
+      return this.data[index][field];
+    }
+  }
+
+  /**
+   * @method getData
+   * @returns {Object}
+   */
+  getData() {
+    return this.data;
+  }
+
+  /**
+   * @description Returns a plotly style array of graphs
+   * @param {Array} compareFields
+   */
+  getPlotlyJSON(compareFields = [
+    {
+      x: 'matrix_size',
+      y: 'gpu_run_time-mat_mult'
+    },
+    {
+      x: 'matrix_size',
+      y: 'pipe_run_time'
+    },
+    {
+      x: 'matrix_size',
+      y: 'score'
+    }
+  ]) {
+    if (!this.singleData){
+      const retArr = [];
+      compareFields.forEach((compareField) => {
+        retArr.push(convertToPlotlyJSON(this.data, {
+          x: compareField.x,
+          y: compareField.y
+        }))
+      })
+
+      return retArr;
+    }
+    else throw "Only possible for multi-data arrays"
+  }
+  
+  /**
+   * @description Returns a plotly style array of graphs
+   * @param {Array} compareFields
+   */
+  getChartistJSON(compareFields = [
+    {
+      x: 'matrix_size',
+      y: 'gpu_run_time-mat_mult'
+    },
+    {
+      x: 'matrix_size',
+      y: 'pipe_run_time'
+    },
+    {
+      x: 'matrix_size',
+      y: 'score'
+    }
+  ]) {
+    if (!this.singleData){
+      const retArr = [];
+      compareFields.forEach((compareField) => {
+        retArr.push(convertToChartistJSON(this.data, {
+          x: compareField.x,
+          y: compareField.y
+        }))
+      })
+
+      return retArr;
+    }
+    else throw "Only possible for multi-data arrays"
+  }
+}
+
+module.exports = BenchmarkOut;
+},{"./export-as-json":167}],167:[function(require,module,exports){
+/**
+ * @method removeUnnecesasaryProps
+ * @description removes unnecessary properties from the benchmarks object(to be stringified)
+ * @param {"Object"} data The benchmark data
+ * @returns {"Object"}
+ */
+const removeUnnecessaryProps = (data) => {
+  data.options.gpu = "";
+  data.options.cpu = "";
+
+  return data
+}
+
+/**
+ * @method getBenchmarkJSON
+ * @description returns the benchmark data as a JSON string
+ * @param {"Object"} data The benchmark data
+ * @returns {"Object"}
+ */
+const getBenchmarkJSON = (data) => {
+  return JSON.stringify(removeUnnecessaryProps(data));
+}
+
+const getPlotData = (dataArr, axes, plotFunction) => {
+  const setVal = (input, data) => {
+    let outData;
+    switch (input) {
+      case 'matrix_size':
+        outData = data.options.matrix_size;
+        break;
+
+      case 'gpu_score':
+        outData = data.score.gpu;
+        break;
+      case 'cpu_score': 
+        outData = data.score.cpu;
+        break;
+
+      case 'gpu_run_time_mat_mult':
+        outData = data.run_time.mat_mult.gpu.avg;
+        break;
+      case 'gpu_run_time_mat_conv':
+        outData = data.run_time.mat_conv.gpu.avg;
+        break;
+      case 'cpu_run_time_mat_mult':
+        outData = data.run_time.mat_mult.cpu.avg;
+        break;
+      case 'cpu_run_time_mat_conv':
+        outData = data.run_time.mat_conv.cpu.avg;
+        break;
+
+      case 'pipe_run_time':
+        outData = data.run_time.pipe.gpu.avg;
+        break;
+    }
+    return outData;
+  }
+
+  dataArr.forEach(data => {
+    let x, y;
+    x = setVal(axes.x, data);
+    y = setVal(axes.y, data);
+
+    plotFunction(x, y);
+  })
+}
+
+/**
+ * @method getPlotlyJSON
+ * @description returns multiple benchmarks as plotly format graph JSON string
+ * @param {"Array"} dataArr An array of benchmarks
+ * @param {"Object"} axes An object containing x and y axis labels
+ */
+const getPlotlyJSON = (dataArr, axes = {x: '', y: ''}) => {
+  const out = {x_series: [], y_series: []}
+  
+  getPlotData(dataArr, axes, (x, y) => {
+    out.x_series.push(x);
+    out.y_series.push(y);
+  })
+
+  return out;
+}
+
+/**
+ * @method getChartistJSON
+ * @description returns multiple benchmarks as chartist format graph JSON string
+ * @param {"Array"} dataArr An array of benchmarks
+ * @param {"Object"} axes An object containing x and y axis labels
+ */
+const getChartistJSON = (dataArr, axes = {x: '', y: ''}) => {
+  const out = [];
+  
+  getPlotData(dataArr, axes, (x, y) => {
+    out.push({
+      x,
+      y
+    })
+  })
+  
+  return out;
+}
+
+module.exports = {
+  getBenchmarkJSON,
+  getPlotlyJSON,
+  getChartistJSON
+}
+},{}],168:[function(require,module,exports){
+const { GPU } = require('gpu.js');
+
+/**
+ * @param {...Options} options
+ */
+const getDefaultOptions = (options) => {
+  options.num_benchmarks = options.num_benchmarks || 1;
+
+  options.matrix_size = options.matrix_size || 512;
+
+  options.logs = typeof options.logs != 'undefined' ? options.logs : true;
+  options.cpu_benchmark = typeof options.cpu_benchmark != 'undefined' ? options.cpu_benchmark : true;
+
+  options.gpu = options.gpu || new GPU({mode: 'gpu'});
+  options.cpu = options.cpu || new GPU({mode: 'cpu'});
+
+  return options;
+}
+
+module.exports = getDefaultOptions;
+},{"gpu.js":145}],169:[function(require,module,exports){
 module.exports = arr => {
   const avg = Math.floor(((arr.reduce((acc, val) => acc + val)) / arr.length) * 100) / 100,
     min = arr.reduce((min, val) => Math.min(min, val)),
@@ -20342,7 +30669,7 @@ module.exports = arr => {
     max
   }
 }
-},{}],103:[function(require,module,exports){
+},{}],170:[function(require,module,exports){
 /**
  * @method getgetTextureKernel
  * @param {"GPU"} gpu 
@@ -20351,7 +30678,7 @@ module.exports = arr => {
  */
 const getgetTextureKernel = (gpu, arrayX, arrayY) => {
   return gpu.createKernel(function(array) {
-    return array[this.thread.y][this.thread.x]
+    return array[this.thread.y][this.thread.x];
   },
   {
     output: [arrayX, arrayY]
@@ -20359,4 +30686,99 @@ const getgetTextureKernel = (gpu, arrayX, arrayY) => {
 }
 
 module.exports = getgetTextureKernel;
-},{}]},{},[96]);
+},{}],171:[function(require,module,exports){
+const { YELLOW_UNDER, NC } = require('../cli/colors'),
+  BenchmarkOut = require('./benchmark-out'),
+  getDefaultOptions = require('./get-default-options'),
+  run = require('../run'),
+  { br } = require('../cli/format');
+/**
+ * @method multipleBenchmark
+ * @description runs multiple GPU.js benchmarks each with different options
+ * @param {"Object"} options array of optional options objects
+ * @returns {"Object"}
+ */
+const multipleBenchmark = (options = {
+  commonOptions: { // options common to all but can be overridden in range or in fullOptions, preference given to range
+    cpu_benchmark: false
+  },
+  range: { // only one of this and fullOptions works
+    optionName: 'matrix_size',
+    interval: [128, 1024],
+    step: 100 //(default 10) one of step or commonRatio can be used, preference given to step
+    // commonRatio: 2 (G.P.: 128, 256, 512, 1024)
+  },
+  fullOptions: [
+    {
+      // array of options objects for each benchmark(only one of this and range works, preference given to range)
+    }
+  ]
+}) => {
+  const out = new BenchmarkOut();
+  const commonBenchmarkOptions = getDefaultOptions(options.commonOptions);
+  const benchmarkOptionsArr = [];
+
+  if (options.range) {
+    const interval = options.range.interval,
+      optionName = options.range.optionName;
+    
+    if (options.range.step) {
+      const step = options.range.step;
+
+      for (let i = interval[0]; i <= interval[1]; i += step) {
+        benchmarkOptionsArr.push({
+          ...commonBenchmarkOptions,
+        })
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = i;
+      }
+    }
+    else if (options.range.commonRatio) {
+      const commonRatio = options.range.commonRatio;
+
+      for (let i = interval[0]; i <= interval[1]; i *= commonRatio) {
+        benchmarkOptionsArr.push({
+          ...commonBenchmarkOptions,
+        })
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = i;
+      }
+    }
+    else {
+      const step = 10;
+
+      for (let i = interval[0]; i <= interval[1]; i += step) {
+        benchmarkOptionsArr.push({
+          ...commonBenchmarkOptions,
+        })
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = i;
+      }
+    }
+
+
+  }
+  else if (options.fullOptions) {
+    options.fullOptions.forEach(optionSet => {
+      benchmarkOptionsArr.push({
+        ...commonBenchmarkOptions,
+        ...optionSet
+      })
+    })
+  }
+
+  benchmarkOptionsArr.forEach((benchmarkOption, i) => {
+    console.log(`Config ${YELLOW_UNDER}#${i}${NC}:`);
+    
+    console.log(`MATRIX_SIZE: ${YELLOW_UNDER}${benchmarkOption.matrix_size}${NC}`);
+    console.log(`NUM_BENCHMARKS: ${YELLOW_UNDER}${benchmarkOption.num_benchmarks}${NC}`);
+    console.log(`CPU_BENCHMARK: ${YELLOW_UNDER}${benchmarkOption.cpu_benchmark}${NC}`);
+    br();
+    
+    out.addData(run(benchmarkOption));
+    br();
+    br();
+  })
+
+  return out;
+}
+
+module.exports = multipleBenchmark;
+},{"../cli/colors":158,"../cli/format":159,"../run":161,"./benchmark-out":166,"./get-default-options":168}]},{},[160]);

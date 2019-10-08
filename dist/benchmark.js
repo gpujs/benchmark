@@ -29879,11 +29879,11 @@ const kernel = [
   [2, 1, 2],
   [1, 2, 1]
 ]
+
 const kernelX = kernel[0].length,
   kernelY = kernel.length,
   paddingX = Math.floor(kernelX / 2),
   paddingY = Math.floor(kernelY / 2);
-
 
 /**
  * @method paddificate
@@ -30085,7 +30085,6 @@ const run = options => {
   options.output = [options.matrix_size, options.matrix_size];
   
   const getTexture = getgetTextureKernel(options.gpu, options.matrix_size, options.matrix_size);
-
   const mat = benchIt(() => generateMatrices(options.matrix_size)),
     padded = benchIt(() => paddificate(mat.ret[0], paddingX, paddingY));
   
@@ -30176,11 +30175,9 @@ const run = options => {
     mat_pad: padded.time,
 
     build_time,
-
     run_time,
 
     stats,
-
     score: getScore(run_time, options.matrix_size),
 
     options
@@ -30468,7 +30465,7 @@ class BenchmarkOut {
   getPlotlyJSON(compareFields = [
     {
       x: 'matrix_size',
-      y: 'gpu_run_time-mat_mult'
+      y: 'gpu_run_time_mat_mult'
     },
     {
       x: 'matrix_size',
@@ -30476,7 +30473,7 @@ class BenchmarkOut {
     },
     {
       x: 'matrix_size',
-      y: 'score'
+      y: 'gpu_score'
     }
   ]) {
     if (!this.singleData){
@@ -30500,7 +30497,7 @@ class BenchmarkOut {
   getChartistJSON(compareFields = [
     {
       x: 'matrix_size',
-      y: 'gpu_run_time-mat_mult'
+      y: 'gpu_run_time_mat_mult'
     },
     {
       x: 'matrix_size',
@@ -30508,7 +30505,7 @@ class BenchmarkOut {
     },
     {
       x: 'matrix_size',
-      y: 'score'
+      y: 'gpu_score'
     }
   ]) {
     if (!this.singleData){

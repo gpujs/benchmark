@@ -18,7 +18,7 @@
   "author": "gpujs",
   "license": "MIT",
   "dependencies": {
-    "gpu.js": "^2.0.3",
+    "gpu.js": "2.1.0",
     "performance-now": "^2.1.0"
   },
   "bugs": {

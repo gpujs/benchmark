@@ -55,19 +55,54 @@ const run = options => {
   }
 
   for (let i = 1; i <= options.num_benchmarks; i++){
-    benchmarks.mat_mult.gpu.push(benchIt(() => funcs.mat_mult.gpu(mat.ret[0], mat.ret[1])).time);
-    if (options.cpu_benchmark) {benchmarks.mat_mult.cpu.push(benchIt(() => funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])).time)}
+    benchmarks.mat_mult.gpu.push(
+      benchIt(() => 
+        {
+          funcs.mat_mult.gpu(mat.ret[0], mat.ret[1])
+          funcs.mat_mult.gpu.destroy()
+        }
+      ).time
+    )
 
-    benchmarks.mat_conv.gpu.push(benchIt(() => funcs.mat_conv.gpu(padded.ret, kernel)).time);
-    if (options.cpu_benchmark) {benchmarks.mat_conv.cpu.push(benchIt(() => funcs.mat_conv.cpu(padded.ret, kernel)).time)}
+    benchmarks.mat_conv.gpu.push(
+      benchIt(() => 
+        {
+          funcs.mat_conv.gpu(padded.ret, kernel)
+        }
+      ).time
+    )
     
-    const matrixTexs = mat.ret.map(arr => getTexture(arr));
+    if (options.cpu_benchmark) {
+      benchmarks.mat_mult.cpu.push(
+        benchIt(() => 
+          {
+            funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])
+            funcs.mat_mult.cpu.destroy()
+          }
+        ).time
+      )
+    }
+
+    if (options.cpu_benchmark) {
+      benchmarks.mat_conv.cpu.push(
+        benchIt(() => 
+          {
+            funcs.mat_conv.cpu(padded.ret, kernel)
+            funcs.mat_conv.cpu.destroy()
+          }
+        ).time
+      )
+    }
+    
+    const matrixTexs = mat.ret.map(arr => getTexture(arr))
+    getTexture.destroy();
 
     benchmarks.pipe.gpu.push(
       benchIt(() => {
         const func = funcs.mat_mult.pipe;
 
         func(func(func(func(matrixTexs[0], matrixTexs[1]), matrixTexs[2]), matrixTexs[3]), matrixTexs[4]).toArray();
+        func.destroy();
       }).time
     )
 
@@ -77,6 +112,7 @@ const run = options => {
           const func = funcs.mat_mult.cpu;
 
           func(func(func(func(mat.ret[0], mat.ret[1]), mat.ret[2]), mat.ret[3]), mat.ret[4]);
+          func.destroy();
         }).time
       )
     }

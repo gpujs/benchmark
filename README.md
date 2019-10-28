@@ -131,10 +131,10 @@ Where options is an object with the following properties:
 - `commonOptions`(*Object*): Options common to every benchmark in a sequence. (default: `{cpu_benchmark: false}`)
 - `range`(*Object*): Define a range of option(number type) values, one for each benchmark in the sequence. *e.g.*: matrix_size: 512, 1024, 1536... or matrix_size: 512, 1024, 2048 ...
 Here, the specified option can either be incremented by a fixed number(common difference) or multiplied by a fixed number(common factor).
-- - `optionName`(*String*): The name of the option for which the range is to be set. *e.g.*: matrix_size (Default: `matrix_size`)
-- - `interval`(*Array*): An array with upper and lower limits for the range. *e.g.*: [512, 2048] (Default: `[128, 1024]`)
-- - `step`(*Number*): The fixed number which is to be added(common difference). (Default: `100`)
-- - `commonRatio`(*Number*): The fixed number to be multiplied. (Default: none) 
+  - `optionName`(*String*): The name of the option for which the range is to be set. *e.g.*: matrix_size (Default: `matrix_size`)
+  - `interval`(*Array*): An array with upper and lower limits for the range. *e.g.*: [512, 2048] (Default: `[128, 1024]`)
+  - `step`(*Number*): The fixed number which is to be added(common difference). (Default: `100`)
+  - `commonRatio`(*Number*): The fixed number to be multiplied. (Default: none) 
 ###### NOTE: Only one of `step` and `commonRatio` can be used 
 - `fullOptions`(*Array*): An array of objects specifying separate set of options for each benchmark in the sequence(commonOptions properties can be overridden here). (Default: none)
 ###### NOTE: Only one of `range` and `fullOptions` can be used
@@ -262,25 +262,25 @@ The following options can be passed on to the `benchmark` or `multipleBenchmark`
 #### Stats
 The [output](#output) contains a `stats` property which shows the overall stats of the benchmark:
 - `run_time`: The run time stats
-- - `mat_mult`, `mat_conv`, `pipe`(*Object*): These three objects contain the stats for each type of benchmark.
-- - - `diff`: Has a single property which cotains performance comparison scores between CPU and GPU.
-- - - - `cpu_gpu`:
-- - - - - `min`, `max`, `avg`: The minimum, maximum and average time taken stats
-- - - - - - `winner`(`gpu` | `cpu`): The better performer among the two.
-- - - - - - `percentage`(*Number*): By how much percentage it is better.
+  - `mat_mult`, `mat_conv`, `pipe`(*Object*): These three objects contain the stats for each type of benchmark.
+    - `diff`: Has a single property which cotains performance comparison scores between CPU and GPU.
+      - `cpu_gpu`:
+        - `min`, `max`, `avg`: The minimum, maximum and average time taken stats
+          - `winner`(`gpu` | `cpu`): The better performer among the two.
+          - `percentage`(*Number*): By how much percentage it is better.
 
 - `build_time`: The build time stats
-- - `mat_mult`, `mat_conv`: Built time stats for each benchmark.
-- - - `diff`: Same as the diff object in `run_time` except that it compares GPU v/s GPU(pipeline mode) in the property `gpu_pipe`.
+  - `mat_mult`, `mat_conv`: Built time stats for each benchmark.
+    - `diff`: Same as the diff object in `run_time` except that it compares GPU v/s GPU(pipeline mode) in the property `gpu_pipe`.
 
 - `overall`: The overall stats
-- - `mat_mult`, `mat_conv`: Overall stats for each benchmark
-- - - `best_performer`(`gpu` | `cpu`): The best overall performer.
-- - - `worst_performer`(`gpu` | `cpu`): The worst overall performer.
-- - - `diff`: Same as the diff object in `run_time`
+    `mat_mult`, `mat_conv`: Overall stats for each benchmark
+    - `best_performer`(`gpu` | `cpu`): The best overall performer.
+    - `worst_performer`(`gpu` | `cpu`): The worst overall performer.
+    - `diff`: Same as the diff object in `run_time`
 
 - `score`: The score object is a property of the main output object.
-- - `gpu`, `cpu`(*Number*): A score is a number representing the overall normalized average performance of the GPU or CPU. This score can be directly compared to other benchmarks or hardware.
+  - `gpu`, `cpu`(*Number*): A score is a number representing the overall normalized average performance of the GPU or CPU. This score can be directly compared to other benchmarks or hardware.
 
 #### BenchmarkOut
 This object stores the output of **Benchmark**.
@@ -289,28 +289,28 @@ This object stores the output of **Benchmark**.
 ##### Properties
 - `mat_gen`, `mat_pad`(*Number*): Matrix generation and matrix padding times in `ms`.
 - `build_time`(*Object*): 
-- - `mat_mult`, `mat_conv`(*Object*)
-- - - `gpu`, `pipe`(*Number*): Compile times for GPU and GPU(pipeline mode) in `ms` for each benchmark.
+  - `mat_mult`, `mat_conv`(*Object*)
+    - `gpu`, `pipe`(*Number*): Compile times for GPU and GPU(pipeline mode) in `ms` for each benchmark.
 - `run_time`(*Object*): Run times for each benchmark.
-- - `mat_mult`, `mat_conv`, `pipe`(*Object*): Run times for each benchmark.
-- - - `gpu`, `cpu`(*Object*): GPU and CPU run times.
-- - - - `min`, `max`, `avg`(*Number*): The minimum, maximum and average run times in `ms`.
+  - `mat_mult`, `mat_conv`, `pipe`(*Object*): Run times for each benchmark.
+    - `gpu`, `cpu`(*Object*): GPU and CPU run times.
+      - `min`, `max`, `avg`(*Number*): The minimum, maximum and average run times in `ms`.
 
 ##### Methods
 - `getDataField(field, index = 0)`(returns: ***): Gets any one of the output field(property).
-- - `field`(*String*): The name of the field.
-- - `index`(Number): The index of the benchmark if multiple benchmarks are run.
+  - `field`(*String*): The name of the field.
+  - `index`(Number): The index of the benchmark if multiple benchmarks are run.
 - `getPlotlyJSON(compareFields)`, `getChartistJSON(compareFields)`(Returns: *Array*): Returns plotly or Chartist style JSON Object for charts. (only for multiple benchmarks)
-- - `compareFields`: An array of objects having two properties `x` and `y` representing the data to be plotted on their respective axes.
-- - - `x`, `y`(*String*): Can be one of:
-- - - - `matrix_size`
-- - - - `gpu_score`
-- - - - `cpu_score`
-- - - - `gpu_run_time_mat_mult`: GPU matrix multiplication run time
-- - - - `cpu_run_time_mat_mult`: CPU matrix multiplication run time
-- - - - `gpu_run_time_mat_conv`: GPU matrix convolution run time
-- - - - `cpu_run_time_mat_conv`: CPU matrix convolution run time
-- - - - `pipe_run_time`: GPU pipelining run time
+  - `compareFields`: An array of objects having two properties `x` and `y` representing the data to be plotted on their respective axes.
+    - `x`, `y`(*String*): Can be one of:
+      - `matrix_size`
+      - `gpu_score`
+      - `cpu_score`
+      - `gpu_run_time_mat_mult`: GPU matrix multiplication run time
+      - `cpu_run_time_mat_mult`: CPU matrix multiplication run time
+      - `gpu_run_time_mat_conv`: GPU matrix convolution run time
+      - `cpu_run_time_mat_conv`: CPU matrix convolution run time
+      - `pipe_run_time`: GPU pipelining run time
 
 Default value of `compareFields` argument for `getPlotlyJSON` and `getChartistJSON` methods:
 ```js

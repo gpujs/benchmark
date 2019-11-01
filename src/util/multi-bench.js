@@ -50,11 +50,8 @@ const multipleBenchmark = (options = {
         benchmarkOptionsArr.push({
           ...commonBenchmarkOptions,
         })
-        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = Math.min(i, interval[1]);
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = Math.min(i, interval[1])
       }
-
-      console.log(benchmarkOptionsArr);
-      process.exit(0);
     }
     else {
       const step = 10;

@@ -29,7 +29,7 @@ npm install --save-dev @gpujs/benchmark
 
 ### Browser Usage
 #### Building
-**NOTE**: The latest dist files are not included since v2.1.0 due to problems with browserify. This issue will be addressed soon.
+**NOTE**: The latest dist files are not included since v2.1.0 due to problems with browserify(#7). This issue will be addressed as soon as possible.
 **NOTE**: The dist files are also included in the npm module and GitHub repository, skip this step if you are not running a modified script locally.
 We use browserify and minify to build the distributable files `dist/benchmark.js` and `dist/benchmark.min.js`.
 After running the setup script, run the following command

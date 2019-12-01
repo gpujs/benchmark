@@ -85,13 +85,13 @@ const run = options => {
       benchmarks.mat_conv.cpu.push(
         benchIt(() => 
           {
-            funcs.mat_conv.cpu(padded.ret, kernel)
+            funcs.mat_conv.cpu(padded.ret, kernel);
           }
         ).time
       )
     }
     
-    const matrixTexs = mat.ret.map(arr => getTexture(arr))
+    const matrixTexs = mat.ret.map(arr => getTexture(arr));
 
     benchmarks.pipe.gpu.push(
       benchIt(() => {
@@ -100,6 +100,8 @@ const run = options => {
         func(func(func(func(matrixTexs[0], matrixTexs[1]), matrixTexs[2]), matrixTexs[3]), matrixTexs[4]).toArray();
       }).time
     )
+
+    matrixTexs.forEach(tex => tex.delete()); // Delete textures to free VRAM
 
     if (options.cpu_benchmark) {
       benchmarks.pipe.cpu.push(
@@ -112,6 +114,11 @@ const run = options => {
     }
     
     if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
+  }
+  
+  for (let i in funcs) {
+    funcs[i].gpu.destroy();
+    funcs[i].pipe.destroy();
   }
 
   const run_time = {

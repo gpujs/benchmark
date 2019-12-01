@@ -32,7 +32,7 @@ const multipleBenchmark = (options = {
   if (options.range) {
     const interval = options.range.interval,
       optionName = options.range.optionName;
-    
+
     if (options.range.step) {
       const step = options.range.step;
 
@@ -50,7 +50,7 @@ const multipleBenchmark = (options = {
         benchmarkOptionsArr.push({
           ...commonBenchmarkOptions,
         })
-        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = i;
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = Math.min(i, interval[1])
       }
     }
     else {
@@ -77,12 +77,12 @@ const multipleBenchmark = (options = {
 
   benchmarkOptionsArr.forEach((benchmarkOption, i) => {
     console.log(`Config ${YELLOW_UNDER}#${i}${NC}:`);
-    
+
     console.log(`MATRIX_SIZE: ${YELLOW_UNDER}${benchmarkOption.matrix_size}${NC}`);
     console.log(`NUM_BENCHMARKS: ${YELLOW_UNDER}${benchmarkOption.num_benchmarks}${NC}`);
     console.log(`CPU_BENCHMARK: ${YELLOW_UNDER}${benchmarkOption.cpu_benchmark}${NC}`);
     br();
-    
+
     out.addData(run(benchmarkOption));
     br();
     br();

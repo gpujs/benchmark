@@ -1,6 +1,6 @@
 {
   "name": "@gpujs/benchmark",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "private": false,
   "description": "A benchmarking tool for gpu.js",
   "main": "src/index.js",

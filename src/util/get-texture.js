@@ -9,7 +9,8 @@ const getgetTextureKernel = (gpu, arrayX, arrayY) => {
     return array[this.thread.y][this.thread.x];
   },
   {
-    output: [arrayX, arrayY]
+    output: [arrayX, arrayY],
+    pipeline: true
   })
 }
 

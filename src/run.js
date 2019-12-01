@@ -59,7 +59,6 @@ const run = options => {
       benchIt(() => 
         {
           funcs.mat_mult.gpu(mat.ret[0], mat.ret[1])
-          funcs.mat_mult.gpu.destroy()
         }
       ).time
     )
@@ -77,7 +76,6 @@ const run = options => {
         benchIt(() => 
           {
             funcs.mat_mult.cpu(mat.ret[0], mat.ret[1])
-            funcs.mat_mult.cpu.destroy()
           }
         ).time
       )
@@ -88,21 +86,18 @@ const run = options => {
         benchIt(() => 
           {
             funcs.mat_conv.cpu(padded.ret, kernel)
-            funcs.mat_conv.cpu.destroy()
           }
         ).time
       )
     }
     
     const matrixTexs = mat.ret.map(arr => getTexture(arr))
-    getTexture.destroy();
 
     benchmarks.pipe.gpu.push(
       benchIt(() => {
         const func = funcs.mat_mult.pipe;
 
         func(func(func(func(matrixTexs[0], matrixTexs[1]), matrixTexs[2]), matrixTexs[3]), matrixTexs[4]).toArray();
-        func.destroy();
       }).time
     )
 
@@ -112,7 +107,6 @@ const run = options => {
           const func = funcs.mat_mult.cpu;
 
           func(func(func(func(mat.ret[0], mat.ret[1]), mat.ret[2]), mat.ret[3]), mat.ret[4]);
-          func.destroy();
         }).time
       )
     }

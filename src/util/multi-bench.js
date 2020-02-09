@@ -1,8 +1,8 @@
-const { YELLOW_UNDER, NC } = require('../cli/colors'),
+const { YELLOW_UNDER, NC } = require('../../cli/colors'),
   BenchmarkOut = require('./benchmark-out'),
   getDefaultOptions = require('./get-default-options'),
   run = require('../run'),
-  { br } = require('../cli/format');
+  { br } = require('../../cli/format');
 /**
  * @method multipleBenchmark
  * @description runs multiple GPU.js benchmarks each with different options

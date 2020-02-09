@@ -1,10 +1,10 @@
 const { benchmark: bench, multipleBenchmark } = require('./src/index'),
-  logMinMax = require('./src/cli/log-min-max'),
-  { GREEN_NO_UNDER, NC, RED_FLASH, YELLOW_UNDER, YELLOW_NO_UNDER } = require('./src/cli/colors'),
-  { br } = require('./src/cli/format'),
+  logMinMax = require('./cli/log-min-max'),
+  { GREEN_NO_UNDER, NC, RED_FLASH, YELLOW_UNDER, YELLOW_NO_UNDER } = require('./cli/colors'),
+  { br } = require('./cli/format'),
   fs = require('fs'),
   path = require('path'),
-  { logRunTimeStats, logBuildTimeStats, logOverallStats } = require('./src/cli/log-stats');
+  { logRunTimeStats, logBuildTimeStats, logOverallStats } = require('./cli/log-stats');
 
 let options,
   multiple = false;

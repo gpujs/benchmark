@@ -1,10 +1,12 @@
 const getDiff = require('../diff');
 const formatDiff = require('../format-diff');
 const runTimeFormat = require('../output_formats/run-time-format.json');
+const _ = require('lodash');
 
 const generateRunStats = (stats, run_time) => {
   for (const bench in stats.run_time) {
-    stats.run_time[bench] = runTimeFormat;
+    stats.run_time[bench] = _.cloneDeep(runTimeFormat);
+
     for (const diffName in stats.run_time[bench].diff) {
       const contenders = diffName.split('_');
       const rawDiffs = {

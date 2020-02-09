@@ -272,7 +272,7 @@ The [output](#output) contains a `stats` property which shows the overall stats 
 
 - `build_time`: The build time stats
   - `mat_mult`, `mat_conv`: Built time stats for each benchmark.
-    - `diff`: Same as the diff object in `run_time` except that it compares GPU v/s GPU(pipeline mode) in the property `gpu_pipe`.
+    - `diff`: Same as the diff object in `run_time` except that it compares GPU v/s GPU(pipeline mode) in the property `gpu_pipe`. (P.S. Best Performer and Worst Performer are not included)
 
 - `overall`: The overall stats
     `mat_mult`, `mat_conv`: Overall stats for each benchmark

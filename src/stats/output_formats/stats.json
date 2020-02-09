@@ -4,7 +4,10 @@
     "mat_conv": {},
     "pipe": {}
   },
-  "build_time": {},
+  "build_time": {
+    "mat_mult": {},
+    "mat_conv": {}
+  },
   "overall": {
     "mat_mult": {},
     "mat_conv": {}

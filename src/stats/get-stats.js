@@ -1,69 +1,14 @@
 const getDiff = require('./diff');
-const formatDiff = (diff, contenders) => {
-  if (diff.diff >= 100){
-    contenders.splice(diff.greater, diff.greater + 1);
-
-    return {
-      percentage: -1,
-      winner: contenders[0]
-    }
-  }
-  return {
-    percentage: diff.diff,
-    winner: contenders[diff.greater]
-  }
-}
+const formatDiff = require('./format-diff');
+const stats = require('./output_formats/stats.json');
+// const overallFormat = require('./output_formats/overall-format.json');
+// const runTimeFormat = require('./output_formats/run-time-format.json');
+// const buildTimeFormat = require('./output_formats/build-time-format.json');
 
 const generateStatsObj = (run_time, build_time) => {
-  const 
-    mat_mult = {
-      diff: {
-        cpu_gpu: {}
-      },
-      best_performer: '',
-      worst_performer: ''
-    },
-    mat_conv = {
-      diff: {
-        cpu_gpu: {}
-      },
-      best_performer: '',
-      worst_performer: ''
-    },
-    pipe = {
-      diff: {
-        cpu_gpu: {}
-      },
-      best_performer: '',
-      worst_performer: ''
-    };
-
-  const stats = {
-    run_time: {
-      mat_mult,
-      mat_conv,
-      pipe
-    },
-    build_time: {
-      mat_mult: {diff: {gpu_pipe: {}}},
-      mat_conv: {diff: {gpu_pipe: {}}}
-    },
-    overall: {
-      mat_mult: {
-        best_performer: {},
-        worst_performer: {},
-        diff: {}
-      },
-      mat_conv: {
-        best_performer: {},
-        worst_performer: {},
-        diff: {}
-      }
-    }
-  }
 
   for (const bench in stats.run_time) {
-    for (const diffName in stats.run_time[bench].diff){
+    for (const diffName in stats.run_time[bench].diff) {
       const contenders = diffName.split('_');
       const rawDiffs = {
         min: {},
@@ -124,12 +69,15 @@ const generateStatsObj = (run_time, build_time) => {
     let better_total = Infinity,
       better_performer = '',
       worse_total = 0,
-      worse_performer = '';
-      let performerNotBenched;
+      worse_performer = '',
+      performerNotBenched;
+
     for (const performer in run_time[bench]){
+
       const performer_build_time = performer == 'cpu' ? 0 : build_time[bench][performer],
         performer_run_time = run_time[bench][performer].avg,
         total_time = performer_build_time + performer_run_time;
+
       if (total_time < better_total && run_time[bench][performer].avg != -1){
         better_total = total_time;
         better_performer = performer;

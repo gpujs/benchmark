@@ -29,13 +29,9 @@ const logRunTimeStats = ({run_time}) => {
       
       if (!performerNotBenched){
         console.log(`Performance Comparison between ${YELLOW_NO_UNDER}${performerMap[performers[0]]}${NC} and ${YELLOW_NO_UNDER}${performerMap[performers[1]]}${NC}:`);
-        br();
-        console.log(`Better Average Value Performer: ${YELLOW_NO_UNDER}${performerMap[avg.winner]}${NC}, PERCENTAGE: ${YELLOW_UNDER}${percentage.avg}${NC}%`);
-        br();
+        console.log(`Better Performer: ${YELLOW_NO_UNDER}${performerMap[avg.winner]}${NC} by ${YELLOW_UNDER}${percentage.avg}${NC}%`);
       }
     }
-    console.log(`${GREEN_NO_UNDER}Best Performer${NC}: ${YELLOW_NO_UNDER}${performerMap[run_time[bench].best_performer]}${NC}`);
-    console.log(`${RED_NO_UNDER}Worst Performer${NC}: ${YELLOW_NO_UNDER}${performerNotBenched ? 'Not Benchmarked' : performerMap[run_time[bench].worst_performer]}${NC}`);
     br(2);
   }
 }

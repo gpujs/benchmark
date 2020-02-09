@@ -5,6 +5,5 @@ const getVal = val => val == -1 ? `${YELLOW_UNDER}Not Benchmarked${NC}` : `${YEL
 
 module.exports = minMax => {
   console.log(`GPU average: ${getVal(minMax.gpu.avg)}`);
-  br();
   console.log(`CPU average: ${getVal(minMax.cpu.avg)}`);
 }

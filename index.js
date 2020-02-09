@@ -51,32 +51,28 @@ if (!multiple) {
   br();
 
   const benchmarks = bench(options).getData();
+  br(2);
 
-  console.log(`matrix generation time: ${YELLOW_UNDER}${benchmarks.mat_gen}${NC} ms (generated 5 matrices)`);
-  console.log(`matrix padding time: ${YELLOW_UNDER}${benchmarks.mat_pad}${NC} ms`);
+  console.log(`Matrix Generation Time: ${YELLOW_UNDER}${benchmarks.mat_gen}${NC} ms (Generated 5 Matrices)`);
+  console.log(`Matrix Padding Time: ${YELLOW_UNDER}${benchmarks.mat_pad}${NC} ms`);
   br(2);
 
   console.log(`${GREEN_NO_UNDER}COMPILE TIME:${NC}`);
-  br();
 
-  console.log(`matrix multiplication compile time: ${YELLOW_UNDER}${benchmarks.build_time.mat_mult.gpu}${NC} ms`);
-  console.log(`matrix multiplication (pipeline) compile time: ${YELLOW_UNDER}${benchmarks.build_time.mat_mult.pipe}${NC} ms`);
-  br();
-  console.log(`matrix convolution compile time: ${YELLOW_UNDER}${benchmarks.build_time.mat_conv.gpu}${NC} ms`);
+  console.log(`Matrix Multiplication Compile Time: ${YELLOW_UNDER}${benchmarks.build_time.mat_mult.gpu}${NC} ms`);
+  console.log(`Matrix Multiplication (Pipeline) Compile Time: ${YELLOW_UNDER}${benchmarks.build_time.mat_mult.pipe}${NC} ms`);
+  console.log(`Matrix Convolution Compile Time: ${YELLOW_UNDER}${benchmarks.build_time.mat_conv.gpu}${NC} ms`);
   br(2);
 
   console.log(`${GREEN_NO_UNDER}MATRIX MULTIPLICATION RUN TIME:${NC}`);
-  br();
   logMinMax(benchmarks.run_time.mat_mult);
   br(2);
 
   console.log(`${GREEN_NO_UNDER}MATRIX CONVOLUTION RUN TIME:${NC}`);
-  br();
   logMinMax(benchmarks.run_time.mat_conv);
   br();
 
   console.log(`${GREEN_NO_UNDER}PIPELINE BENCHMARK:${NC}`);
-  br();
   logMinMax(benchmarks.run_time.pipe);
   br();
 

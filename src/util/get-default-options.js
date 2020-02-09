@@ -8,8 +8,8 @@ const getDefaultOptions = (options) => {
 
   options.matrix_size = options.matrix_size || 512;
 
-  options.logs = typeof options.logs != 'undefined' ? options.logs : true;
-  options.cpu_benchmark = typeof options.cpu_benchmark != 'undefined' ? options.cpu_benchmark : true;
+  options.logs = options.logs || true;
+  options.cpu_benchmark = options.cpu_benchmark || true;
 
   options.gpu = options.gpu || new GPU({mode: 'gpu'});
   options.cpu = options.cpu || new GPU({mode: 'cpu'});

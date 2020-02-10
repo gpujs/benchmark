@@ -12,28 +12,31 @@ benchMap = {
   pipe: 'Pipelining'
 }
 
-const logRunTimeStats = ({run_time}) => {
-  for (const bench in run_time) {
-    console.log(`Benchmark: ${GREEN_UNDER}${benchMap[bench]}${NC}`);
-    br();
-    let performerNotBenched;
+const logRunTimeStats = ({run_time}, cpuBenched) => {
+  if (cpuBenched) {
+    for (const bench in run_time) {
+      console.log(`Benchmark: ${GREEN_UNDER}${benchMap[bench]}${NC}`);
+      br();
+      let performerNotBenched;
 
-    for (const diff in run_time[bench].diff) {
-      const performers = diff.split('_'),
-        { avg } = run_time[bench].diff[diff],
-        percentage = {
-          avg: run_time[bench].diff[diff].avg.percentage
-        };
+      for (const diff in run_time[bench].diff) {
+        const performers = diff.split('_'),
+          { avg } = run_time[bench].diff[diff],
+          percentage = {
+            avg: run_time[bench].diff[diff].avg.percentage
+          };
 
-      performerNotBenched = (performerNotBenched || percentage.min == -1 || percentage.max == -1 || percentage.avg == -1);
-      
-      if (!performerNotBenched){
-        console.log(`Performance Comparison between ${YELLOW_NO_UNDER}${performerMap[performers[0]]}${NC} and ${YELLOW_NO_UNDER}${performerMap[performers[1]]}${NC}:`);
-        console.log(`Better Performer: ${YELLOW_NO_UNDER}${performerMap[avg.winner]}${NC} by ${YELLOW_UNDER}${percentage.avg}${NC}%`);
+        performerNotBenched = (performerNotBenched || percentage.min == -1 || percentage.max == -1 || percentage.avg == -1);
+        
+        if (!performerNotBenched){
+          console.log(`Performance Comparison between ${YELLOW_NO_UNDER}${performerMap[performers[0]]}${NC} and ${YELLOW_NO_UNDER}${performerMap[performers[1]]}${NC}:`);
+          console.log(`Better Performer: ${YELLOW_NO_UNDER}${performerMap[avg.winner]}${NC} by ${YELLOW_UNDER}${percentage.avg}${NC}%`);
+        }
       }
+      br(2);
     }
-    br(2);
   }
+  else console.log('Nothing to Compare With \n')
 }
 
 const logBuildTimeStats = ({build_time}) => {
@@ -46,13 +49,16 @@ const logBuildTimeStats = ({build_time}) => {
   }
 }
 
-const logOverallStats = ({overall}) => {
-  for (const bench in overall) {
-    console.log(`Benchmark: ${GREEN_UNDER}${benchMap[bench]}${NC}`);
-    br();
-    if (overall[bench].diff.percentage != -1) console.log(`${YELLOW_NO_UNDER}${performerMap[overall[bench].best_performer]}${NC} was ${YELLOW_UNDER}${overall[bench].diff.percentage}${NC}% faster than ${YELLOW_NO_UNDER}${performerMap[overall[bench].worst_performer]}${NC}`);
-    br(2);
+const logOverallStats = ({overall}, cpuBenched) => {
+  if (cpuBenched) {
+    for (const bench in overall) {
+      console.log(`Benchmark: ${GREEN_UNDER}${benchMap[bench]}${NC}`);
+      br();
+      if (overall[bench].diff.percentage != -1) console.log(`${YELLOW_NO_UNDER}${performerMap[overall[bench].best_performer]}${NC} was ${YELLOW_UNDER}${overall[bench].diff.percentage}${NC}% faster than ${YELLOW_NO_UNDER}${performerMap[overall[bench].worst_performer]}${NC}`);
+      br(2);
+    }
   }
+  else console.log('Nothing to Compare With')
 }
 
 module.exports = {

@@ -51,6 +51,7 @@ if (!multiple) {
   br();
 
   const benchmarks = bench(options).getData();
+  const cpuBenched = benchmarks.options.cpu_benchmark;
   br(2);
 
   console.log(`Matrix Generation Time: ${YELLOW_UNDER}${benchmarks.mat_gen}${NC} ms (Generated 5 Matrices)`);
@@ -81,15 +82,15 @@ if (!multiple) {
 
   console.log(`${GREEN_NO_UNDER}Run Time Statistics:${NC}`);
   br();
-  logRunTimeStats(benchmarks.stats);
+  logRunTimeStats(benchmarks.stats, cpuBenched);
 
   console.log(`${GREEN_NO_UNDER}Build Time Statistics:${NC}`);
   br();
-  logBuildTimeStats(benchmarks.stats);
+  logBuildTimeStats(benchmarks.stats, cpuBenched);
 
   console.log(`${GREEN_NO_UNDER}Overall Statistics:${NC}`);
   br();
-  logOverallStats(benchmarks.stats);
+  logOverallStats(benchmarks.stats, cpuBenched);
 
   console.log(`${GREEN_NO_UNDER}Score:${NC}`);
   br();

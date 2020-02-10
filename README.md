@@ -9,6 +9,7 @@ This tool runs three benchmarks:
 - [Installation](#installation)
 - [Browser Usage](#browser-usage)
 - [Usage](#usage)
+- [CLI Usage](#cli)
 - [Multiple Benchmarks](#multiple-benchmarks)
 - [Output](#output)
 - [Options](#options)

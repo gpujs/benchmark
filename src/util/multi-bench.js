@@ -3,13 +3,8 @@ const { YELLOW_UNDER, NC } = require('../../cli/colors'),
   getDefaultOptions = require('./get-default-options'),
   run = require('../run'),
   { br } = require('../../cli/format');
-/**
- * @method multipleBenchmark
- * @description runs multiple GPU.js benchmarks each with different options
- * @param {"Object"} options array of optional options objects
- * @returns {"Object"}
- */
-const multipleBenchmark = (options = {
+
+const defaultOptions = {
   commonOptions: { // options common to all but can be overridden in range or in fullOptions, preference given to range
     cpu_benchmark: false
   },
@@ -24,9 +19,16 @@ const multipleBenchmark = (options = {
       // array of options objects for each benchmark(only one of this and range works, preference given to range)
     }
   ]
-}) => {
+}
+/**
+ * @method multipleBenchmark
+ * @description runs multiple GPU.js benchmarks each with different options
+ * @param {"Object"} options array of optional options objects
+ * @returns {"Object"}
+ */
+const multipleBenchmark = (options = defaultOptions) => {
   const out = new BenchmarkOut();
-  const commonBenchmarkOptions = getDefaultOptions(options.commonOptions);
+  const commonBenchmarkOptions = getDefaultOptions(options.commonOptions || defaultOptions.commonOptions);
   const benchmarkOptionsArr = [];
 
   if (options.range) {

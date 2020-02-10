@@ -50,8 +50,6 @@ const logOverallStats = ({overall}) => {
   for (const bench in overall) {
     console.log(`Benchmark: ${GREEN_UNDER}${benchMap[bench]}${NC}`);
     br();
-    console.log(`${GREEN_NO_UNDER}Best Performer${NC}: ${YELLOW_NO_UNDER}${performerMap[overall[bench].best_performer]}${NC}`);
-    console.log(`${RED_NO_UNDER}Worst Performer${NC}: ${YELLOW_NO_UNDER}${overall[bench].diff.percentage == -1 ? 'Not Benchmarked' : performerMap[overall[bench].worst_performer]}${NC}`);
     if (overall[bench].diff.percentage != -1) console.log(`${YELLOW_NO_UNDER}${performerMap[overall[bench].best_performer]}${NC} was ${YELLOW_UNDER}${overall[bench].diff.percentage}${NC}% faster than ${YELLOW_NO_UNDER}${performerMap[overall[bench].worst_performer]}${NC}`);
     br(2);
   }

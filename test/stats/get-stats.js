@@ -1,6 +1,7 @@
 const test = require('tape'),
   getDiff = require('../../src/stats/diff'),
-  { formatDiff, generateStatsObj } = require('../../src/stats/get-stats');
+  { generateStatsObj } = require('../../src/stats/get-stats'),
+  formatDiff = require('../../src/stats/format-diff');
 
 test('formatDiff stats function test', t => {
   const diff = getDiff(5, 10),

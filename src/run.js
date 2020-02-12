@@ -92,7 +92,6 @@ const run = options => {
     }
     
     const matrixTexs = mat.ret.map(arr => getTexture(arr));
-    console.log(matrixTexs)
 
     benchmarks.pipe.gpu.push(
       benchIt(() => {

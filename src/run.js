@@ -92,12 +92,23 @@ const run = options => {
     }
     
     const matrixTexs = mat.ret.map(arr => getTexture(arr));
+    console.log(matrixTexs)
 
     benchmarks.pipe.gpu.push(
       benchIt(() => {
         const func = funcs.mat_mult.pipe;
+        matrixTexs.forEach((matrixTex, i) => {
+          if (i < matrixTexs.length - 1) {
+            const newTex = func(matrixTex, matrixTexs[i+1]);
+            matrixTex.delete();
+            matrixTexs[i+1] = newTex;
+          }
+        })
 
-        func(func(func(func(matrixTexs[0], matrixTexs[1]), matrixTexs[2]), matrixTexs[3]), matrixTexs[4]).toArray();
+        const out = matrixTexs[4].toArray(); // To delete the final texture
+        matrixTexs[4].delete();
+
+        return out;
       }).time
     )
 
@@ -120,6 +131,7 @@ const run = options => {
     funcs[i].gpu.destroy();
     funcs[i].pipe.destroy();
   }
+  getTexture.destroy();
 
   const run_time = {
     mat_mult: {

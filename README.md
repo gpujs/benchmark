@@ -10,6 +10,7 @@ This tool runs three benchmarks:
 - [Browser Usage](#browser-usage)
 - [Usage](#usage)
 - [CLI Usage](#cli)
+- [Saving Graphs As JSON](#saving-graphs-as-json)
 - [Multiple Benchmarks](#multiple-benchmarks)
 - [Output](#output)
 - [Options](#options)
@@ -123,6 +124,46 @@ yarn start --multiple options
 [options](#options) to the CLI are stored in a stringified JSON object passed as an argument.
 More about [Multiple Benchmarks](#multiple-benchmarks).
 
+#### Saving Graphs as JSON
+1. **Plotly Style JSON**
+```sh
+yarn start --multiple --returnPlotlyJSON
+```
+This will log to the console, [plotly.js](https://plot.ly/javascript/) style JSON which stores the graph data for GPU score v/s matrix size of each benchmark.
+
+```sh
+yarn start --multiple --savePlotlyJSONToFile=path/to/file.json
+```
+This saves the [plotly.js](https://plot.ly/javascript/) style JSON data for:
+- GPU score v/s matrix size
+- GPU matrix multiplication run time v/s matrix size
+- CPU score v/s matrix size
+- CPU matrix multiplication run time v/s matrix size
+
+##### NOTE: If CPU is not benchmarked, CPU score and run time will have non-meaningful negative values which are to be ignored.
+##### NOTE: Filename need not have a `.json` extension.
+
+1. **Chartist Style JSON**
+```sh
+yarn start --multiple --returnChartistJSON
+```
+This will log to the console, [chartist.js](https://gionkunz.github.io/chartist-js/) style JSON which stores the graph data for GPU score v/s matrix size of each benchmark.
+
+```sh
+yarn start --multiple --saveChartistJSONToFile=path/to/file.json
+```
+This saves the [chartist.js](https://gionkunz.github.io/chartist-js/) style JSON data for:
+- GPU score v/s matrix size
+- GPU matrix multiplication run time v/s matrix size
+- CPU score v/s matrix size
+- CPU matrix multiplication run time v/s matrix size
+
+##### NOTE: If CPU is not benchmarked, CPU score and run time will have non-meaningful negative values which are to be ignored.
+##### NOTE: Filename need not have a `.json` extension.
+
+##### NOTE: One or more of the above arguments for JSON output can be used with `--multiple`
+
+
 #### Multiple Benchmarks
 **Benchmark** allows you to run a sequence of benchmarks each with different custom options or each having number options like matrix size changed by a fixed amount.
 
@@ -177,45 +218,6 @@ benchmark.multipleBenchmark({
   ]
 })
 ```
-
-#### Saving Graphs as JSON
-1. **Plotly Style JSON**
-```sh
-yarn start --multiple --returnPlotlyJSON
-```
-This will log to the console, [plotly.js](https://plot.ly/javascript/) style JSON which stores the graph data for GPU score v/s matrix size of each benchmark.
-
-```sh
-yarn start --multiple --savePlotlyJSONToFile=path/to/file.json
-```
-This saves the [plotly.js](https://plot.ly/javascript/) style JSON data for:
-- GPU score v/s matrix size
-- GPU matrix multiplication run time v/s matrix size
-- CPU score v/s matrix size
-- CPU matrix multiplication run time v/s matrix size
-
-##### NOTE: If CPU is not benchmarked, CPU score and run time will have non-meaningful negative values which are to be ignored.
-##### NOTE: Filename need not have a `.json` extension.
-
-1. **Chartist Style JSON**
-```sh
-yarn start --multiple --returnChartistJSON
-```
-This will log to the console, [chartist.js](https://gionkunz.github.io/chartist-js/) style JSON which stores the graph data for GPU score v/s matrix size of each benchmark.
-
-```sh
-yarn start --multiple --saveChartistJSONToFile=path/to/file.json
-```
-This saves the [chartist.js](https://gionkunz.github.io/chartist-js/) style JSON data for:
-- GPU score v/s matrix size
-- GPU matrix multiplication run time v/s matrix size
-- CPU score v/s matrix size
-- CPU matrix multiplication run time v/s matrix size
-
-##### NOTE: If CPU is not benchmarked, CPU score and run time will have non-meaningful negative values which are to be ignored.
-##### NOTE: Filename need not have a `.json` extension.
-
-##### NOTE: One or more of the above arguments for JSON output can be used with `--multiple`
 
 ### API
 

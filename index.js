@@ -1,48 +1,39 @@
 const { benchmark: bench, multipleBenchmark } = require('./src/index'),
+  multiBench = require('./cli/multiple-bench'),
+  writeFileSyncRecursive = require('./cli/write-file-recursive'),
+  parseArgs = require('./cli/parse-args'),
+  graphDefaults = require('./cli/graph-defaults.json'),
+  multipleDefaults = require('./cli/multiple-defaults.json'),
   logMinMax = require('./cli/log-min-max'),
   { GREEN_NO_UNDER, NC, RED_FLASH, YELLOW_UNDER, YELLOW_NO_UNDER } = require('./cli/colors'),
   { br } = require('./cli/format'),
-  fs = require('fs'),
-  path = require('path'),
   { logRunTimeStats, logBuildTimeStats, logOverallStats } = require('./cli/log-stats');
 
-let options,
+let options = {},
   multiple = false;
+const parsedArgs = parseArgs(process.argv);
+
 br();
 
-if (typeof process.argv[2] != 'undefined') {
+if (parsedArgs) {
   try {
-    if (process.argv.includes('--multiple')) {
+    if (parsedArgs.multiple) {
       multiple = true;
-      if ((process.argv.find(opt => /^{.*}$/.test(opt))) !== undefined) options = JSON.parse(process.argv.find(opt => /^{.*}$/.test(opt)));
+
+      if (parsedArgs.options) options = JSON.parse(parsedArgs.options);
       else {
-        options = {
-          common_options: {
-            cpu_benchmark: false,
-            logs: true
-          },
-          range: {
-            option_name: 'matrix_size',
-            interval: [64, 512],
-            common_ratio: 2
-          }
-        }
+        options = {...multipleDefaults};
       }
     }
-    else {
-      if (process.argv.find(opt => /^{.*}$/.test(opt))) options = JSON.parse(process.argv.find(opt => /^{.*}$/.test(opt)));
-      else options = {};
-    }
+    else if (parsedArgs.options) options = JSON.parse(parsedArgs.options);
   }
   catch (e) {
     console.log(`${RED_FLASH}Options argument is not a valid JSON string or contains errors, running benchmarks without any options${NC}`);
     br();
-    options = {};
   }
 }
-else {
-  options = {};
-}
+
+
 if (!multiple) {
   options.logs = true;
 
@@ -102,102 +93,39 @@ if (!multiple) {
 else {
   const benchmark = multipleBenchmark(options);
   
-  if (process.argv.includes('--returnPlotlyJSON')){
+  if (parsedArgs.returnPlotlyJSON){
     br();
     console.log('PLOTLY JSON:');
     br();
     
-    console.log(benchmark.getPlotlyJSON([{
-      x: 'matrix_size',
-      y: 'gpu_score'
-    }]))
+    console.log(benchmark.getPlotlyJSON([graphDefaults[0]]))
     
     br();
   }
   
-  if (process.argv.includes('--returnChartistJSON')){
+  if (parsedArgs.returnChartistJSON){
     br();
     console.log('CHARTIST JSON:');
     br();
     
-    console.log(benchmark.getChartistJSON([{
-      x: 'matrix_size',
-      y: 'gpu_score'
-    }]))
+    console.log(benchmark.getChartistJSON([graphDefaults[0]]))
     
     br();
   }
-
-  function writeFileSyncRecursive(filename, content) {
-    const folders = filename.split(path.sep).slice(0, -1);
-    if (folders.length > 0) {
-      
-      // create folder path if it doesn't exist
-      folders.reduce((last, folder) => {
-        if (!fs.existsSync(last)) {
-          fs.mkdirSync(last);
-        }
-        const folderPath = last + path.sep + folder;
-        
-        if (!fs.existsSync(folderPath)) {
-          fs.mkdirSync(folderPath);
-        }
-        
-        return folderPath;
-      })
-    }
-    fs.writeFileSync(filename, content);
+  
+  if (parsedArgs.plotlySavePath) {
+    const path = parsedArgs.plotlySavePath.replace(/^--savePlotlyJSONToFile=/, '').replace(/.json$/, '');
+    
+    writeFileSyncRecursive(`${path}.json`, JSON.stringify(
+      benchmark.getPlotlyJSON(graphDefaults)
+    ))
   }
   
-  let saveOpt = process.argv.find(opt => /^--savePlotlyJSONToFile=/.test(opt));
-  if (saveOpt !== undefined) {
-    saveOpt = saveOpt.replace(/^--savePlotlyJSONToFile=/, '').replace(/.json$/, '');
+  if (parsedArgs.chartistSavePath) {
+    const path = parsedArgs.chartistSavePath.replace(/^--saveChartistJSONToFile=/, '').replace(/.json$/, '');
     
-    writeFileSyncRecursive(`${saveOpt}.json`, JSON.stringify(
-      benchmark.getPlotlyJSON([
-        {
-          x: 'matrix_size',
-          y: 'gpu_score'   
-        },
-        {
-          x: 'matrix_size',
-          y: 'gpu_run_time_mat_mult'
-        },
-        {
-          x: 'matrix_size',
-          y: 'cpu_score'   
-        },
-        {
-          x: 'matrix_size',
-          y: 'cpu_run_time_mat_mult'
-        }
-      ])
-    ));
-  }
-  
-  saveOpt = process.argv.find(opt => /^--saveChartistJSONToFile=/.test(opt));
-  if (saveOpt !== undefined) {
-    saveOpt = saveOpt.replace(/^--saveChartistJSONToFile=/, '').replace(/.json$/, '');
-    
-    writeFileSyncRecursive(`${saveOpt}.json`, JSON.stringify(
-      benchmark.getChartistJSON([
-        {
-          x: 'matrix_size',
-          y: 'gpu_score'   
-        },
-        {
-          x: 'matrix_size',
-          y: 'gpu_run_time_mat_mult'
-        },
-        {
-          x: 'matrix_size',
-          y: 'cpu_score'   
-        },
-        {
-          x: 'matrix_size',
-          y: 'cpu_run_time_mat_mult'
-        }
-      ])
-    ));
+    writeFileSyncRecursive(`${path}.json`, JSON.stringify(
+      benchmark.getChartistJSON(graphDefaults)
+    ))
   }
 }

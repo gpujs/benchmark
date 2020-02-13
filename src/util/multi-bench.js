@@ -1,4 +1,4 @@
-const { YELLOW_UNDER, NC } = require('../../cli/colors'),
+const { YELLOW_UNDER, RED_FLASH, NC } = require('../../cli/colors'),
   BenchmarkOut = require('./benchmark-out'),
   getDefaultOptions = require('./get-default-options'),
   run = require('../run'),
@@ -89,6 +89,8 @@ const multipleBenchmark = (options = defaultOptions) => {
     br();
     br();
   })
+
+  if (benchmarkOptionsArr.length === 0) console.log(`${RED_FLASH}The Options are Invalid${NC}`);
 
   return out;
 }

@@ -5,16 +5,16 @@ const { YELLOW_UNDER, NC } = require('../../cli/colors'),
   { br } = require('../../cli/format');
 
 const defaultOptions = {
-  commonOptions: { // options common to all but can be overridden in range or in fullOptions, preference given to range
+  common_options: { // options common to all but can be overridden in range or in full_options, preference given to range
     cpu_benchmark: false
   },
-  range: { // only one of this and fullOptions works
-    optionName: 'matrix_size',
+  range: { // only one of this and full_options works
+    option_name: 'matrix_size',
     interval: [128, 1024],
-    step: 100 //(default 10) one of step or commonRatio can be used, preference given to step
-    // commonRatio: 2 (G.P.: 128, 256, 512, 1024)
+    step: 100 //(default 10) one of step or common_ratio can be used, preference given to step
+    // common_ratio: 2 (G.P.: 128, 256, 512, 1024)
   },
-  fullOptions: [
+  full_options: [
     {
       // array of options objects for each benchmark(only one of this and range works, preference given to range)
     }
@@ -28,12 +28,12 @@ const defaultOptions = {
  */
 const multipleBenchmark = (options = defaultOptions) => {
   const out = new BenchmarkOut();
-  const commonBenchmarkOptions = getDefaultOptions(options.commonOptions || defaultOptions.commonOptions);
+  const commonBenchmarkOptions = getDefaultOptions(options.common_options || defaultOptions.common_options);
   const benchmarkOptionsArr = [];
 
   if (options.range) {
     const interval = options.range.interval,
-      optionName = options.range.optionName;
+      option_name = options.range.option_name;
 
     if (options.range.step) {
       const step = options.range.step;
@@ -42,17 +42,17 @@ const multipleBenchmark = (options = defaultOptions) => {
         benchmarkOptionsArr.push({
           ...commonBenchmarkOptions,
         })
-        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = i;
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][option_name] = i;
       }
     }
-    else if (options.range.commonRatio) {
-      const commonRatio = options.range.commonRatio;
+    else if (options.range.common_ratio) {
+      const common_ratio = options.range.common_ratio;
 
-      for (let i = interval[0]; i <= interval[1]; i *= commonRatio) {
+      for (let i = interval[0]; i <= interval[1]; i *= common_ratio) {
         benchmarkOptionsArr.push({
           ...commonBenchmarkOptions,
         })
-        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = Math.min(i, interval[1])
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][option_name] = Math.min(i, interval[1])
       }
     }
     else {
@@ -62,14 +62,14 @@ const multipleBenchmark = (options = defaultOptions) => {
         benchmarkOptionsArr.push({
           ...commonBenchmarkOptions,
         })
-        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][optionName] = i;
+        benchmarkOptionsArr[benchmarkOptionsArr.length - 1][option_name] = i;
       }
     }
 
 
   }
-  else if (options.fullOptions) {
-    options.fullOptions.forEach(optionSet => {
+  else if (options.full_options) {
+    options.full_options.forEach(optionSet => {
       benchmarkOptionsArr.push({
         ...commonBenchmarkOptions,
         ...optionSet

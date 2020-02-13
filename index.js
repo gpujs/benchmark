@@ -17,14 +17,14 @@ if (typeof process.argv[2] != 'undefined') {
       if ((process.argv.find(opt => /^{.*}$/.test(opt))) !== undefined) options = JSON.parse(process.argv.find(opt => /^{.*}$/.test(opt)));
       else {
         options = {
-          commonOptions: {
+          common_options: {
             cpu_benchmark: false,
             logs: true
           },
           range: {
-            optionName: 'matrix_size',
+            option_name: 'matrix_size',
             interval: [64, 512],
-            commonRatio: 2
+            common_ratio: 2
           }
         }
       }

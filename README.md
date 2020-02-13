@@ -130,42 +130,42 @@ More about [Multiple Benchmarks](#multiple-benchmarks).
 benchmark.multipleBenchmark(options);
 ```
 Where options is an object with the following properties:
-- `commonOptions`(*Object*): Options common to every benchmark in a sequence. (default: `{cpu_benchmark: false}`)
+- `common_options`(*Object*): Options common to every benchmark in a sequence. (default: `{cpu_benchmark: false}`)
 - `range`(*Object*): Define a range of option(number type) values, one for each benchmark in the sequence. *e.g.*: matrix_size: 512, 1024, 1536... or matrix_size: 512, 1024, 2048 ...
 Here, the specified option can either be incremented by a fixed number(common difference) or multiplied by a fixed number(common factor).
-  - `optionName`(*String*): The name of the option for which the range is to be set. *e.g.*: matrix_size (Default: `matrix_size`)
+  - `option_name`(*String*): The name of the option for which the range is to be set. *e.g.*: matrix_size (Default: `matrix_size`)
   - `interval`(*Array*): An array with upper and lower limits for the range. *e.g.*: [512, 2048] (Default: `[128, 1024]`)
   - `step`(*Number*): The fixed number which is to be added(common difference). (Default: `100`)
-  - `commonRatio`(*Number*): The fixed number to be multiplied. (Default: none) 
-###### NOTE: Only one of `step` and `commonRatio` can be used 
-- `fullOptions`(*Array*): An array of objects specifying separate set of options for each benchmark in the sequence(commonOptions properties can be overridden here). (Default: none)
-###### NOTE: Only one of `range` and `fullOptions` can be used
+  - `common_ratio`(*Number*): The fixed number to be multiplied. (Default: none) 
+###### NOTE: Only one of `step` and `common_ratio` can be used 
+- `full_options`(*Array*): An array of objects specifying separate set of options for each benchmark in the sequence(common_options properties can be overridden here). (Default: none)
+###### NOTE: Only one of `range` and `full_options` can be used
 
 ##### Examples
 1. Range: 
 ```js
 benchmark.multipleBenchmark({
-  commonOptions: {
+  common_options: {
     cpu_benchmark: false,
     logs: false
   },
   range: {
-    optionName: 'matrix_size',
+    option_name: 'matrix_size',
     interval: [128, 2048],
-    commonRatio: 2
+    common_ratio: 2
   }
 })
 ```
 The above code runs a separate benchmark for the matrix sizes 128, 256, 512, 1024, 2048 which are in GP.
 
-2. fullOptions:
+2. full_options:
 ```js
 benchmark.multipleBenchmark({
-  commonOptions: {
+  common_options: {
     logs: false,
     cpu_benchmark: false
   },
-  fullOptions: [
+  full_options: [
     {
       logs: true, // override
       matrix_size: 2048
@@ -237,29 +237,29 @@ The following options can be passed on to the `benchmark` or `multipleBenchmark`
 [Multiple Benchmark](#multiple-benchmarks) options have the following structure.
 ```js
 {
-  commonOptions: { // options common to all but can be overridden in range or in fullOptions, preference given to range
+  common_options: { // options common to all but can be overridden in range or in full_options, preference given to range
     cpu_benchmark: false
   },
-  range: { // only one of this and fullOptions works
-    optionName: 'matrix_size',
+  range: { // only one of this and full_options works
+    option_name: 'matrix_size',
     interval: [128, 1024],
-    step: 100 //(default 10)(A.P.: 128, 138, 148, 158) one of step or commonRatio can be used, preference given to step
-    // commonRatio: 2 (G.P.: 128, 256, 512, 1024)
+    step: 100 //(default 10)(A.P.: 128, 138, 148, 158) one of step or common_ratio can be used, preference given to step
+    // common_ratio: 2 (G.P.: 128, 256, 512, 1024)
   },
-  fullOptions: [
+  full_options: [
     {
       // array of options objects for each benchmark(only one of this and range works, preference given to range)
     }
   ]
 }
 ```
-- `commonOptions`(*Object*): Options common to all the benchmarks that are run. (Same as `benchmark` options).
-- `range`(*Object*): Used to create a set of options using a set of rules, for each benchmark. (only one of range or fullOptions can be used)
-  - `optionName`(*String*): The option for which the range is applied. This has to be of type Number. It can be one of `benchmark` options.
+- `common_options`(*Object*): Options common to all the benchmarks that are run. (Same as `benchmark` options).
+- `range`(*Object*): Used to create a set of options using a set of rules, for each benchmark. (only one of range or full_options can be used)
+  - `option_name`(*String*): The option for which the range is applied. This has to be of type Number. It can be one of `benchmark` options.
   - `interval`(*Array*): The upper and lower limits for the option.
-  - `step`(*Number*): The common difference between each option value. All the options will be in an AP. (only one of `step` or `commonRatio` can be used, preference is given to `step`)
-  - `commonRatio`(*Number*): The common ratio between each option value. All the options will be in a GP. (only one of `step` or `commonRatio` can be used, preference is given to `step`)
-- `fullOptions`(*Array*): An array of options object, each one corresponding to one benchmark. Each object is the same as `benchmark` options. (only one of range or fullOptions can be used)
+  - `step`(*Number*): The common difference between each option value. All the options will be in an AP. (only one of `step` or `common_ratio` can be used, preference is given to `step`)
+  - `common_ratio`(*Number*): The common ratio between each option value. All the options will be in a GP. (only one of `step` or `common_ratio` can be used, preference is given to `step`)
+- `full_options`(*Array*): An array of options object, each one corresponding to one benchmark. Each object is the same as `benchmark` options. (only one of range or full_options can be used)
 
 #### Stats
 The [output](#output) contains a `stats` property which shows the overall stats of the benchmark:
@@ -302,8 +302,8 @@ This object stores the output of **Benchmark**.
 - `getDataField(field, index = 0)`(returns: ***): Gets any one of the output field(property).
   - `field`(*String*): The name of the field.
   - `index`(Number): The index of the benchmark if multiple benchmarks are run.
-- `getPlotlyJSON(compareFields)`, `getChartistJSON(compareFields)`(Returns: *Array*): Returns plotly or Chartist style JSON Object for charts. (only for multiple benchmarks)
-  - `compareFields`: An array of objects having two properties `x` and `y` representing the data to be plotted on their respective axes.
+- `getPlotlyJSON(compare_fields)`, `getChartistJSON(compare_fields)`(Returns: *Array*): Returns plotly or Chartist style JSON Object for charts. (only for multiple benchmarks)
+  - `compare_fields`: An array of objects having two properties `x` and `y` representing the data to be plotted on their respective axes.
     - `x`, `y`(*String*): Can be one of:
       - `matrix_size`
       - `gpu_score`
@@ -314,7 +314,7 @@ This object stores the output of **Benchmark**.
       - `cpu_run_time_mat_conv`: CPU matrix convolution run time
       - `pipe_run_time`: GPU pipelining run time
 
-Default value of `compareFields` argument for `getPlotlyJSON` and `getChartistJSON` methods:
+Default value of `compare_fields` argument for `getPlotlyJSON` and `getChartistJSON` methods:
 ```js
 [
   {

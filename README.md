@@ -101,7 +101,8 @@ yarn start
 ```sh
 node ./index.js
 ```
-#### Using CLI with options
+This will prompt you to enter the optional [options]
+#### Using CLI with JSON Options as Input
 ```sh
 yarn start options
 ```
@@ -119,7 +120,7 @@ yarn start '{"num_benchmarks": 4}'
 
 #### Multiple Benchmarks in CLI
 ```sh
-yarn start --multiple options
+yarn start --multiple [options?]
 ```
 [options](#options) to the CLI are stored in a stringified JSON object passed as an argument.
 More about [Multiple Benchmarks](#multiple-benchmarks).
@@ -232,7 +233,7 @@ The following options can be passed on to the `benchmark` or `multipleBenchmark`
 - `num_benchmarks`(*Integer*): The number of times the benchmark should be run. (default: 1)
 - `logs`(*Boolean*): Toggles console logs by the library.
 - `cpu_benchmark`(*Boolean*): Toggles the benchmarking of CPU. False is recommended to big matrix sizes. (default: true)
-- `cpu`(*Object*): A custom `GPU({mode: 'cpu})` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
+- `cpu`(*Object*): A custom `GPU({mode: 'cpu'})` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
 - `gpu`(*Object*): A custom `GPU()` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
 
 2. `multipleBenchmark` options:

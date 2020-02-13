@@ -20,7 +20,8 @@
   "dependencies": {
     "gpu.js": "2.6.6",
     "lodash": "^4.17.15",
-    "performance-now": "^2.1.0"
+    "performance-now": "^2.1.0",
+    "readline-sync": "^1.4.10"
   },
   "bugs": {
     "url": "https://github.com/gpujs/benchmark/issues"

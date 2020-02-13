@@ -9,7 +9,6 @@ const run = require('./run'),
  * @param {...Options} options Optional options
  */
 const benchmark = (options = {}) => {
-
   options = getDefaultOptions(options);
   const out = new BenchmarkOut(true, run(options));
 

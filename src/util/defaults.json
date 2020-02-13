@@ -1,0 +1,6 @@
+{
+  "matrix_size": 512,
+  "logs": true,
+  "cpu_benchmark": true,
+  "num_benchmarks": 1
+}

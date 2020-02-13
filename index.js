@@ -1,6 +1,6 @@
 const { benchmark: bench, multipleBenchmark } = require('./src/index'),
-  multiBench = require('./cli/multiple-bench'),
   writeFileSyncRecursive = require('./cli/write-file-recursive'),
+  getOptionsInput = require('./cli/get-options'),
   parseArgs = require('./cli/parse-args'),
   graphDefaults = require('./cli/graph-defaults.json'),
   multipleDefaults = require('./cli/multiple-defaults.json'),
@@ -36,6 +36,8 @@ if (parsedArgs) {
 
 if (!multiple) {
   options.logs = true;
+
+  getOptionsInput(options);
 
   br();
   console.log(`MATRIX SIZE: ${YELLOW_UNDER}${options.matrix_size || 512}${YELLOW_NO_UNDER}x${YELLOW_UNDER}${options.matrix_size || 512}${NC}`);
@@ -89,7 +91,6 @@ if (!multiple) {
   console.log(`CPU: ${YELLOW_UNDER}${benchmarks.score.cpu < 0 ? 'Not Benchmarked' : benchmarks.score.cpu}${NC}`);
   br();
 }
-
 else {
   const benchmark = multipleBenchmark(options);
   

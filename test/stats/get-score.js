@@ -12,8 +12,8 @@ test('getScore stats function test', t => {
 
   const score = getScore(run_time, matrix_size);
 
-  t.equals(score.gpu, 1000, 'Calculates expected score for GPU');
-  t.equals(score.cpu, 250, 'Calculates expected score for CPU');
+  t.equals(score.gpu, 10485, 'Calculates expected score for GPU');
+  t.equals(score.cpu, 2621, 'Calculates expected score for CPU');
 
   t.end();
 })

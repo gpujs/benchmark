@@ -65,8 +65,6 @@ const multipleBenchmark = (options = defaultOptions) => {
         benchmarkOptionsArr[benchmarkOptionsArr.length - 1][option_name] = i;
       }
     }
-
-
   }
   else if (options.full_options) {
     options.full_options.forEach(optionSet => {

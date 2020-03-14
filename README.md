@@ -287,9 +287,9 @@ The [output](#output) contains a `stats` property which shows the overall stats 
 - `score`: The score object is a property of the main output object.
   - `gpu`, `cpu`(*Number*): A score is a number representing the overall normalized average performance of the GPU or CPU. This score can be directly compared to other benchmarks or hardware.
 
-**TECHNICAL**: The `score` is the ratio of the total number of operations to the time taken for the operations.
+**TECHNICAL**: The `score` is *floor* of one-hundredth of the ratio of the total number of operations to the time taken for the operations.
 - In case of matrix multiplication, one single operation is taken to be the product of two array elements and the total number of operations is taken to be the cube of one of the dimensions[for a square matrix]. 
-- In case of matrix convolution, one single operation is taken to be one full convolution for a single output element and the total number of operations is taken to be the number of elements in output array or sqaure of one of the dimensions of a square matrix.
+- In case of matrix convolution, one single operation is taken to be one full convolution for a single output element and the total number of operations is taken to be the number of elements in output array or square of one of the dimensions of a square matrix.
 
 #### BenchmarkOut
 This object stores the output of **Benchmark**.

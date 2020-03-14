@@ -28,7 +28,8 @@ if (parsedArgs) {
     else if (parsedArgs.options) options = JSON.parse(parsedArgs.options);
   }
   catch (e) {
-    console.log(`${RED_FLASH}Options argument is not a valid JSON string or contains errors, running benchmarks without any options${NC}`);
+    console.log(`${RED_FLASH}Options argument is not a valid JSON string or contains errors, running benchmarks with default options.${NC}`);
+    options = {...multipleDefaults};
     br();
   }
 }

@@ -54,7 +54,7 @@ const run = options => {
     }
   }
 
-  for (let i = 1; i <= options.num_benchmarks; i++){
+  for (let i = 1; i <= options.num_benchmarks; i++) {
     benchmarks.mat_mult.gpu.push(
       benchIt(() => 
         {
@@ -93,25 +93,20 @@ const run = options => {
     
     const matrixTexs = mat.ret.map(arr => getTexture(arr));
 
+    const results = [];
+
+    // For benchmarking pipeline and deleting the textures.
+    const func = (mat1, mat2) => {
+      const result = funcs.mat_mult.pipe(mat1, mat2);
+      results.push(result);
+      return result;
+    }
+
     benchmarks.pipe.gpu.push(
       benchIt(() => {
-        const func = funcs.mat_mult.pipe;
-        matrixTexs.forEach((matrixTex, i) => {
-          if (i < matrixTexs.length - 1) {
-            const newTex = func(matrixTex, matrixTexs[i+1]);
-            matrixTex.delete();
-            matrixTexs[i+1] = newTex;
-          }
-        })
-
-        const out = matrixTexs[4].toArray(); // To delete the final texture
-        matrixTexs[4].delete();
-
-        return out;
+        return func(func(func(func(matrixTexs[0], matrixTexs[1]), matrixTexs[2]), matrixTexs[3]), matrixTexs[4]).toArray();
       }).time
     )
-
-    matrixTexs.forEach(tex => tex.delete()); // Delete textures to free VRAM
 
     if (options.cpu_benchmark) {
       benchmarks.pipe.cpu.push(
@@ -122,6 +117,8 @@ const run = options => {
         }).time
       )
     }
+
+    results.forEach(tex => tex.delete()) // Delete textures to free VRAM
     
     if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
   }

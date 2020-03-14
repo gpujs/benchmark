@@ -1,9 +1,10 @@
-const { NC, YELLOW_UNDER } = require('./colors'),
-  { br } = require('./format');
+const { NC, YELLOW_UNDER } = require('./colors');
 
-const getVal = val => val == -1 ? `${YELLOW_UNDER}Not Benchmarked${NC}` : `${YELLOW_UNDER}${val}${NC} ms`
+const getVal = val => val == -1 ? 
+  `${YELLOW_UNDER}Not Benchmarked${NC}` :
+  `${YELLOW_UNDER}${val.avg}${NC} ms +- ${YELLOW_UNDER}${val.deviation}${NC}%`
 
 module.exports = minMax => {
-  console.log(`GPU average: ${getVal(minMax.gpu.avg)}`);
-  console.log(`CPU average: ${getVal(minMax.cpu.avg)}`);
+  console.log(`GPU average: ${getVal(minMax.gpu)}`);
+  console.log(`CPU average: ${getVal(minMax.cpu)}`);
 }

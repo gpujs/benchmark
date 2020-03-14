@@ -300,6 +300,7 @@ This object stores the output of **Benchmark**.
   - `mat_mult`, `mat_conv`, `pipe`(*Object*): Run times for each benchmark.
     - `gpu`, `cpu`(*Object*): GPU and CPU run times.
       - `min`, `max`, `avg`(*Number*): The minimum, maximum and average run times in `ms`.
+      - `deviation` (*Number*): Percentage deviation of results from average value.
 
 ##### Methods
 - `getDataField(field, index = 0)`(returns: ***): Gets any one of the output field(property).

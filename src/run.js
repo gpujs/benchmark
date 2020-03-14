@@ -132,17 +132,17 @@ const run = options => {
   const run_time = {
     mat_mult: {
       gpu: getMinMaxAvg(benchmarks.mat_mult.gpu),
-      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_mult.cpu) : {min: -1, avg: -1, max: -1}
+      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_mult.cpu) : {min: -1, avg: -1, max: -1, deviation: -1}
     },
 
     mat_conv: {
       gpu: getMinMaxAvg(benchmarks.mat_conv.gpu),
-      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_conv.cpu) : {min: -1, avg: -1, max: -1}
+      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.mat_conv.cpu) : {min: -1, avg: -1, max: -1, deviation: -1}
     },
 
     pipe: {
       gpu: getMinMaxAvg(benchmarks.pipe.gpu),
-      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.pipe.cpu) : {min: -1, avg: -1, max: -1}
+      cpu: options.cpu_benchmark ? getMinMaxAvg(benchmarks.pipe.cpu) : {min: -1, avg: -1, max: -1, deviation: -1}
     }
   }
   

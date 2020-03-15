@@ -10,28 +10,30 @@ This tool runs three benchmarks:
 - [Browser Usage](#browser-usage)
 - [Usage](#usage)
 - [CLI Usage](#cli)
+- [Options](#options)
 - [Saving Graphs As JSON](#saving-graphs-as-json)
 - [Multiple Benchmarks](#multiple-benchmarks)
 - [Output](#output)
-- [Options](#options)
 - [Stats](#stats)
+- [BenchmarkOut Object](#benchmarkout)
 - [Benchmarks](#benchmarks)
+- [Using With React Native](#expo)
 
 ### Installation
-We recommend you to install **benchmark** as a development dependency.
+Benchmark is available on npm under the name `@gpujs/benchmark`.
 #### Using yarn
 ```sh
-yarn add --dev @gpujs/benchmark
+yarn add @gpujs/benchmark
 ```
 #### Using npm
 ```sh
-npm install --save-dev @gpujs/benchmark
+npm install @gpujs/benchmark
 ```
-##### NOTE: If it asks for a GPU.js version, you can choose any version of your choice (>=v2.0.0-rc.10) but the provided dist files will have the version which was the latest during the release of the latest version of **benchmark**
+##### NOTE: If it asks for a GPU.js version, you can choose any version of your choice (>=v2.0.0) but the provided dist files will have the version which was the latest during the release of that version of **benchmark**.
 
 ### Browser Usage
 #### Building
-**NOTE**: The latest dist files are not included since v2.1.0 due to problems with browserify(#7). This issue will be addressed as soon as possible.
+**NOTE**: The latest dist files are not included since v2.1.0 due to problems with browserify(https://github.com/gpujs/benchmark/issues/7). This issue will be addressed as soon as possible.
 **NOTE**: The dist files are also included in the npm module and GitHub repository, skip this step if you are not running a modified script locally.
 We use browserify and minify to build the distributable files `dist/benchmark.js` and `dist/benchmark.min.js`.
 After running the setup script, run the following command
@@ -47,7 +49,9 @@ Include the benchmark dist file in the HTML file.
 or, from the npm module
 ```html
 <script src="path/to/node_modules/@gpujs/benchmark/dist/benchmark.min.js"></script>
-The function can be referred to in JS as `benchmark`
+```
+
+The exported function is `benchmark`.
 ```js
 const out = benchmark(options);
 ```
@@ -91,7 +95,7 @@ npm install -g yarn
 ```sh
 yarn setup
 ```
-##### NOTE: If it asks for a GPU.js version, you can choose any version of your choice (>=v2.0.0-rc.10) but the provided dist files will have the version which was the latest during the release of the latest version of **benchmark**
+##### NOTE: If it asks for a GPU.js version, you can choose any version of your choice (>=v2.0.0) but the provided dist files will have the version which was the latest during the release of the latest version of **benchmark**
 
 4. Run the tool in the CLI
 ```sh
@@ -117,6 +121,45 @@ Here, `options` is a stringified JSON object.
 ```sh
 yarn start '{"num_benchmarks": 4}'
 ```
+
+#### Options
+The following options can be passed on to the `benchmark` or `multipleBenchmark` method.
+
+1. `benchmark` options:
+- `matrix_size`(*Integer*): The size of the uniform matrix used for benchmarking. (default: 512)
+- `num_benchmarks`(*Integer*): The number of times the benchmark should be run. (default: 1)
+- `logs`(*Boolean*): Toggles console logs by the library.
+- `cpu_benchmark`(*Boolean*): Toggles the benchmarking of CPU. False is recommended to big matrix sizes. (default: true)
+- `cpu`(*Object*): A custom `GPU({mode: 'cpu'})` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
+- `gpu`(*Object*): A custom `GPU()` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
+
+2. `multipleBenchmark` options:
+[Multiple Benchmark](#multiple-benchmarks) options have the following structure.
+```js
+{
+  common_options: { // options common to all but can be overridden in range or in full_options, preference given to range
+    cpu_benchmark: false
+  },
+  range: { // only one of this and full_options works
+    option_name: 'matrix_size',
+    interval: [128, 1024],
+    step: 100 //(default 10)(A.P.: 128, 138, 148, 158) one of step or common_ratio can be used, preference given to step
+    // common_ratio: 2 (G.P.: 128, 256, 512, 1024)
+  },
+  full_options: [
+    {
+      // array of options objects for each benchmark(only one of this and range works, preference given to range)
+    }
+  ]
+}
+```
+- `common_options`(*Object*): Options common to all the benchmarks that are run. (Same as `benchmark` options).
+- `range`(*Object*): Used to create a set of options using a set of rules, for each benchmark. (only one of range or full_options can be used)
+  - `option_name`(*String*): The option for which the range is applied. This has to be of type Number. It can be one of the `benchmark` options.
+  - `interval`(*Array*): The upper and lower limits for the option.
+  - `step`(*Number*): The common difference between each option value. All the options will be in an AP. (only one of `step` or `common_ratio` can be used, preference is given to `step`)
+  - `common_ratio`(*Number*): The common ratio between each option value. All the options will be in a GP. (only one of `step` or `common_ratio` can be used, preference is given to `step`)
+- `full_options`(*Array*): An array of options object, each one corresponding to one benchmark. Each object is the same as `benchmark` options. (only one of range or full_options can be used)
 
 #### Multiple Benchmarks in CLI
 ```sh
@@ -225,50 +268,11 @@ benchmark.multipleBenchmark({
 #### Output
 The output of any benchmark(multiple or single) is a [`BenchmarkOut`](#benchmarkout) Object.
 
-#### Options
-The following options can be passed on to the `benchmark` or `multipleBenchmark` method.
-
-1. `benchmark` options:
-- `matrix_size`(*Integer*): The size of the uniform matrix used for benchmarking. (default: 512)
-- `num_benchmarks`(*Integer*): The number of times the benchmark should be run. (default: 1)
-- `logs`(*Boolean*): Toggles console logs by the library.
-- `cpu_benchmark`(*Boolean*): Toggles the benchmarking of CPU. False is recommended to big matrix sizes. (default: true)
-- `cpu`(*Object*): A custom `GPU({mode: 'cpu'})` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
-- `gpu`(*Object*): A custom `GPU()` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
-
-2. `multipleBenchmark` options:
-[Multiple Benchmark](#multiple-benchmarks) options have the following structure.
-```js
-{
-  common_options: { // options common to all but can be overridden in range or in full_options, preference given to range
-    cpu_benchmark: false
-  },
-  range: { // only one of this and full_options works
-    option_name: 'matrix_size',
-    interval: [128, 1024],
-    step: 100 //(default 10)(A.P.: 128, 138, 148, 158) one of step or common_ratio can be used, preference given to step
-    // common_ratio: 2 (G.P.: 128, 256, 512, 1024)
-  },
-  full_options: [
-    {
-      // array of options objects for each benchmark(only one of this and range works, preference given to range)
-    }
-  ]
-}
-```
-- `common_options`(*Object*): Options common to all the benchmarks that are run. (Same as `benchmark` options).
-- `range`(*Object*): Used to create a set of options using a set of rules, for each benchmark. (only one of range or full_options can be used)
-  - `option_name`(*String*): The option for which the range is applied. This has to be of type Number. It can be one of `benchmark` options.
-  - `interval`(*Array*): The upper and lower limits for the option.
-  - `step`(*Number*): The common difference between each option value. All the options will be in an AP. (only one of `step` or `common_ratio` can be used, preference is given to `step`)
-  - `common_ratio`(*Number*): The common ratio between each option value. All the options will be in a GP. (only one of `step` or `common_ratio` can be used, preference is given to `step`)
-- `full_options`(*Array*): An array of options object, each one corresponding to one benchmark. Each object is the same as `benchmark` options. (only one of range or full_options can be used)
-
 #### Stats
 The [output](#output) contains a `stats` property which shows the overall stats of the benchmark:
 - `run_time`: The run time stats
   - `mat_mult`, `mat_conv`, `pipe`(*Object*): These three objects contain the stats for each type of benchmark.
-    - `diff`: Has a single property which cotains performance comparison scores between CPU and GPU.
+    - `diff`: Has a single property that contains performance comparison scores between CPU and GPU.
       - `cpu_gpu`:
         - `min`, `max`, `avg`: The minimum, maximum and average time taken stats
           - `winner`(`gpu` | `cpu`): The better performer among the two.
@@ -288,7 +292,7 @@ The [output](#output) contains a `stats` property which shows the overall stats 
   - `gpu`, `cpu`(*Number*): A score is a number representing the overall normalized average performance of the GPU or CPU. This score can be directly compared to other benchmarks or hardware.
 
 **TECHNICAL**: The `score` is *floor* of one-hundredth of the ratio of the total number of operations in matrix multiplication to the time taken for the operations.
-- In case of matrix multiplication, one single operation is taken to be the product of two array elements and the total number of operations is taken to be the cube of one of the dimensions[for a square matrix].
+- In the case of matrix multiplication, one single operation is taken to be the product of two array elements and the total number of operations is taken to be the cube of one of the dimensions[for a square matrix].
 
 #### BenchmarkOut
 This object stores the output of **Benchmark**.
@@ -304,6 +308,7 @@ This object stores the output of **Benchmark**.
     - `gpu`, `cpu`(*Object*): GPU and CPU run times.
       - `min`, `max`, `avg`(*Number*): The minimum, maximum and average run times in `ms`.
       - `deviation` (*Number*): Percentage deviation of results from average value.
+- `stats`(*Object*): The [statistics](#stats).
 
 ##### Methods
 - `getDataField(field, index = 0)`(returns: ***): Gets any one of the output field(property).
@@ -345,6 +350,17 @@ Default value of `compare_fields` argument for `getPlotlyJSON` and `getChartistJ
 ##### Matrix Multiplication
 This benchmark [multiplies](https://www.mathsisfun.com/algebra/matrix-multiplying.html) two randomly generated uniform-sized matrices and benchmarks the GPU and CPU against the time taken by each.
 
+GPU.js Kernel:
+```js
+function(a, b) {
+  let sum = 0;
+  for (let i = 0; i < this.output.x; i++) {
+    sum += a[this.thread.y][i] * b[i][this.thread.x];
+  }
+  return sum;
+}
+```
+
 ##### Matrix Convolution
 This benchmark [convolves](https://en.wikipedia.org/wiki/Kernel_(image_processing)#Convolution) a 3x3 [kernel](https://en.wikipedia.org/wiki/Kernel_(image_processing)) over a randomly generated uniform sized matrix.
 The convolution kernel is
@@ -354,6 +370,24 @@ The convolution kernel is
 1 2 1
 ```
 
+GPU.js Kernel:
+```js
+function (array, kernel) {
+  let sum = 0;
+  for (let i = 0; i < ${kernelX}; i++){
+    for (let j = 0; j < ${kernelY}; j++){
+      sum += kernel[j][i] * array[this.thread.y + j][this.thread.x + i];
+    }
+  }
+  return sum;
+}
+```
+Where `kernelX` and `kernelY` are the dimensions of the kernel.
+
 ##### Pipelining
 GPU.js supports a feature called [Pipelining](https://github.com/gpujs/gpu.js#pipelining) and this benchmark benchmarks this feature.
-It runs three matrix multiplication benchmarks in a sequence while pipelining the output of the earlier benchmark to be used as an input to the next one. The benchmark is run both on the GPU and the CPU(without pipelining) and the time taken is compared.
+It runs four matrix multiplication benchmarks in a sequence while pipelining the output of the earlier benchmark to be used as an input to the next one. The benchmark is run both on the GPU and the CPU(without pipelining) and the time taken is compared.
+When it is run on the GPU, the output of the previous multiplication is passed on to the next call as a texture (a storage unit on the GPU) on the GPU itself which drastically reduces the time taken because the output need not be converted and transferred to the CPU and back.
+
+### Expo
+GPU.js can be run on Android and iOS devices using [expo-gl](https://github.com/gpujs/expo-gl) which is a simple package developed by the GPU.js community.

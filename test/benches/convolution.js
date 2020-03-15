@@ -43,7 +43,7 @@ test('matrix convolution benchmark test', t => {
   const gpuConvolve = funcs.gpu(expectedPaddedArray, kernel);
     cpuConvolve = funcs.cpu(expectedPaddedArray, kernel);
 
-  t.deepEqual(cpuConvolve, gpuConvolve, 'CPU and GPU kernels return the correct value.');
+  t.deepEqual(cpuConvolve, gpuConvolve, 'CPU and GPU kernels return the same output.');
   t.deepEqual(gpuConvolve, expectedConvolvedArray, 'GPU kernel works correctly.');
   t.deepEqual(cpuConvolve, expectedConvolvedArray, 'CPU kernel works correctly.');
 

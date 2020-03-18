@@ -22,6 +22,7 @@ const run = options => {
     padded = benchIt(() => paddificate(mat.ret[0], paddingX, paddingY));
   
   getTexture.build(mat.ret[0]);
+  const matrixTexs = mat.ret.map(arr => getTexture(arr));
 
   const funcs = {
     mat_mult: matMult.generateFuncs(options.gpu, options.cpu, options.output),
@@ -46,7 +47,7 @@ const run = options => {
   const build_time = {
     mat_mult: {
       gpu: benchIt(() => {funcs.mat_mult.gpu.build(mat.ret[0], mat.ret[1])}).time,
-      pipe: benchIt(() => {funcs.mat_mult.pipe.build(mat.ret[0], mat.ret[1])}).time
+      pipe: benchIt(() => {funcs.mat_mult.pipe.build(matrixTexs[0], matrixTexs[1])}).time
     },
     mat_conv: {
       gpu: benchIt(() => {funcs.mat_conv.gpu.build(padded.ret, kernel)}).time,
@@ -58,7 +59,7 @@ const run = options => {
     benchmarks.mat_mult.gpu.push(
       benchIt(() => 
         {
-          funcs.mat_mult.gpu(mat.ret[0], mat.ret[1]);
+          funcs.mat_mult.gpu.run(mat.ret[0], mat.ret[1]);
         }
       ).time
     )
@@ -66,7 +67,7 @@ const run = options => {
     benchmarks.mat_conv.gpu.push(
       benchIt(() => 
         {
-          funcs.mat_conv.gpu(padded.ret, kernel);
+          funcs.mat_conv.gpu.run(padded.ret, kernel);
         }
       ).time
     )
@@ -90,8 +91,6 @@ const run = options => {
         ).time
       )
     }
-    
-    const matrixTexs = mat.ret.map(arr => getTexture(arr));
 
     const results = [];
 
@@ -118,7 +117,8 @@ const run = options => {
       )
     }
 
-    // results.forEach(tex => tex.delete()) // Delete textures to free VRAM
+    results.forEach(tex => tex.delete()) // Delete textures to free VRAM
+    // matrixTexs.forEach(tex => tex.delete());
     
     if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
   }

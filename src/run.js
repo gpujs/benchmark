@@ -92,16 +92,12 @@ const run = options => {
       )
     }
 
-    const results = [];
-
-    // For benchmarking pipeline and deleting the textures.
     const func = (mat1, mat2) => {
       funcs.mat_mult.pipe.run(mat1, mat2);
       const result = funcs.mat_mult.pipe.renderOutput();
-      results.push(result);
       return result;
     }
-
+    
     benchmarks.pipe.gpu.push(
       benchIt(() => {
         return func(func(func(func(matrixTexs[0], matrixTexs[1]), matrixTexs[2]), matrixTexs[3]), matrixTexs[4]).toArray();
@@ -121,9 +117,7 @@ const run = options => {
     if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
   }
   
-  while (matrixTexs.length > 0) {
-    matrixTexs.pop().delete();
-  }
+  while (matrixTexs.length > 0) matrixTexs.pop().delete();
   
   for (let i in funcs) {
     funcs[i].gpu.destroy();

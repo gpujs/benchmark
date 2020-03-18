@@ -3,7 +3,7 @@ const test = require('tape'),
   run = require('../src/run');
 
 const options = {
-  num_benchmarks: 1,
+  num_iterations: 1,
   matrix_size: 512,
   output: [512, 512],
   logs: false,

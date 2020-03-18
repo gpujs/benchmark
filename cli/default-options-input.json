@@ -1,5 +1,5 @@
 [
   "matrix_size",
-  "num_benchmarks",
+  "num_iterations",
   "cpu_benchmark"
 ]

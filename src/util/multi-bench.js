@@ -79,7 +79,7 @@ const multipleBenchmark = (options = defaultOptions) => {
     console.log(`Config ${YELLOW_UNDER}#${i}${NC}:`);
 
     console.log(`MATRIX_SIZE: ${YELLOW_UNDER}${benchmarkOption.matrix_size}${NC}`);
-    console.log(`NUM_BENCHMARKS: ${YELLOW_UNDER}${benchmarkOption.num_benchmarks}${NC}`);
+    console.log(`NUM_ITERATIONS: ${YELLOW_UNDER}${benchmarkOption.num_iterations}${NC}`);
     console.log(`CPU_BENCHMARK: ${YELLOW_UNDER}${benchmarkOption.cpu_benchmark}${NC}`);
     br();
 

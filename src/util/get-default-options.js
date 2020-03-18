@@ -5,7 +5,7 @@ const { GPU } = require('gpu.js'),
  * @param {...Options} options
  */
 const getDefaultOptions = (options) => {
-  options.num_benchmarks = options.num_benchmarks || defaults.num_benchmarks;
+  options.num_iterations = options.num_iterations || defaults.num_iterations;
 
   options.matrix_size = options.matrix_size || defaults.matrix_size;
 

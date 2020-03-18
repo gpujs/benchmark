@@ -55,7 +55,7 @@ const run = options => {
     }
   }
 
-  for (let i = 1; i <= options.num_benchmarks; i++) {
+  for (let i = 1; i <= options.num_iterations; i++) {
     benchmarks.mat_mult.gpu.push(
       benchIt(() => 
         {
@@ -114,7 +114,7 @@ const run = options => {
       )
     }
     
-    if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
+    if (options.logs) console.log(`Iteration ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
   }
   
   while (matrixTexs.length > 0) matrixTexs.pop().delete();

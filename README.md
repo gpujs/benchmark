@@ -119,7 +119,7 @@ Here, `options` is a stringified JSON object.
 
 ##### Example
 ```sh
-yarn start '{"num_benchmarks": 4}'
+yarn start '{"num_iterations": 4}'
 ```
 
 #### Options
@@ -127,7 +127,7 @@ The following options can be passed on to the `benchmark` or `multipleBenchmark`
 
 1. `benchmark` options:
 - `matrix_size`(*Integer*): The size of the uniform matrix used for benchmarking. (default: 512)
-- `num_benchmarks`(*Integer*): The number of times the benchmark should be run. (default: 1)
+- `num_iterations`(*Integer*): The number of iterations of run time calculation. (default: 1)
 - `logs`(*Boolean*): Toggles console logs by the library.
 - `cpu_benchmark`(*Boolean*): Toggles the benchmarking of CPU. False is recommended to big matrix sizes. (default: true)
 - `cpu`(*Object*): A custom `GPU({mode: 'cpu'})` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)

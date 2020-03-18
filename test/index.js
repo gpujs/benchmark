@@ -5,7 +5,7 @@ test('index.js entry point test', t => {
   const expectedDefaults = require('../src/util/defaults.json'),
     expectedNonDefaultOptions = {
       matrix_size: 1024,
-      num_benchmarks: 5,
+      num_iterations: 5,
       logs: false,
       cpu_benchmark: false
     };

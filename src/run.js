@@ -117,11 +117,10 @@ const run = options => {
         }).time
       )
     }
-
-    results.forEach(tex => tex.delete()); // Delete textures to free VRAM
     
     if (options.logs) console.log(`Benchmark ${YELLOW_UNDER}${i}${NC} ${GREEN_NO_UNDER}completed${NC} ${GREEN_NO_UNDER}✔${NC}`);
   }
+  
   while (matrixTexs.length > 0) {
     matrixTexs.pop().delete();
   }

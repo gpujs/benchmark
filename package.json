@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node ./index.js",
     "setup": "yarn install && npm rebuild",
-    "test": "TEST=true tape test/util/*.js test/stats/*.js test/benches/*.js test/index.js test/run.js | tap-spec",
+    "test": "TEST=true tape test/util/*.js test/stats/*.js test/benches/*.js test/cli/*.js test/index.js test/run.js | tap-spec",
     "build": "node ./build.js",
     "npm-publish": "yarn test && yarn publish"
   },

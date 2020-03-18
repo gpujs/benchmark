@@ -6,6 +6,7 @@ const readlineSync = require('readline-sync'),
 function getOptionsInput(options) {
   console.log(`${GREEN_NO_UNDER}OPTIONS:${NC} (Press Enter to Select the Default Value)`);
   defaultInputs.forEach(input => {
+    if (options.hasOwnProperty(input)) return;
     options[input] = readlineSync.question(`${YELLOW_UNDER}${input}${NC} (${typeof defaults[input]})(default: ${defaults[input]}): `);
     if (options[input] === '') options[input] = defaults[input];
   })

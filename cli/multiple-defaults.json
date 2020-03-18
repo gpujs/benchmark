@@ -1,0 +1,11 @@
+{
+  "common_options": {
+    "cpu_benchmark": false,
+    "logs": true
+  },
+  "range": {
+    "option_name": "matrix_size",
+    "interval": [64, 512],
+    "common_ratio": 2
+  }
+}

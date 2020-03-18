@@ -5,8 +5,8 @@
  * @returns {"Object"}
  */
 const removeUnnecessaryProps = (data) => {
-  data.options.gpu = "";
-  data.options.cpu = "";
+  data.options.gpu = '';
+  data.options.cpu = '';
 
   return data
 }

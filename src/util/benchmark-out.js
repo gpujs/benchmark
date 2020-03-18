@@ -73,9 +73,9 @@ class BenchmarkOut {
 
   /**
    * @description Returns a plotly style array of graphs
-   * @param {Array} compareFields
+   * @param {Array} compare_fields
    */
-  getPlotlyJSON(compareFields = [
+  getPlotlyJSON(compare_fields = [
     {
       x: 'matrix_size',
       y: 'gpu_run_time_mat_mult'
@@ -91,7 +91,7 @@ class BenchmarkOut {
   ]) {
     if (!this.singleData){
       const retArr = [];
-      compareFields.forEach((compareField) => {
+      compare_fields.forEach((compareField) => {
         retArr.push(convertToPlotlyJSON(this.data, {
           x: compareField.x,
           y: compareField.y
@@ -105,9 +105,9 @@ class BenchmarkOut {
   
   /**
    * @description Returns a plotly style array of graphs
-   * @param {Array} compareFields
+   * @param {Array} compare_fields
    */
-  getChartistJSON(compareFields = [
+  getChartistJSON(compare_fields = [
     {
       x: 'matrix_size',
       y: 'gpu_run_time_mat_mult'
@@ -123,7 +123,7 @@ class BenchmarkOut {
   ]) {
     if (!this.singleData){
       const retArr = [];
-      compareFields.forEach((compareField) => {
+      compare_fields.forEach((compareField) => {
         retArr.push(convertToChartistJSON(this.data, {
           x: compareField.x,
           y: compareField.y

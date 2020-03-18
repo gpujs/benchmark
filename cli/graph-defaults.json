@@ -1,0 +1,18 @@
+[
+  {
+    "x": "matrix_size",
+    "y": "gpu_score"   
+  },
+  {
+    "x": "matrix_size",
+    "y": "gpu_run_time_mat_mult"
+  },
+  {
+    "x": "matrix_size",
+    "y": "cpu_score"   
+  },
+  {
+    "x": "matrix_size",
+    "y": "cpu_run_time_mat_mult"
+  }
+]

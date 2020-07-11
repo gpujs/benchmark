@@ -1,5 +1,4 @@
-const { GPU } = require('gpu.js'),
-  defaults = require('./defaults.json')
+const defaults = require('./defaults.json');
 
 /**
  * @param {...Options} options
@@ -12,8 +11,8 @@ const getDefaultOptions = (options) => {
   options.logs = options.logs === undefined ? defaults.logs : options.logs == true;
   options.cpu_benchmark = options.cpu_benchmark === undefined ? defaults.cpu_benchmark : options.cpu_benchmark == true;
 
-  options.gpu = options.gpu || new GPU({mode: 'gpu'});
-  options.cpu = options.cpu || new GPU({mode: 'cpu'});
+  options.gpu = options.gpu;
+  options.cpu = options.cpu;
 
   return options;
 }

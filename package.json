@@ -18,7 +18,6 @@
   "author": "gpujs",
   "license": "MIT",
   "dependencies": {
-    "gpu.js": "^2.8.4",
     "lodash": "^4.17.15",
     "performance-now": "^2.1.0",
     "readline-sync": "^1.4.10"

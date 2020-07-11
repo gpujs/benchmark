@@ -28,6 +28,7 @@
   "homepage": "https://github.com/gpujs/benchmark#readme",
   "devDependencies": {
     "browserify": "16.5.0",
+    "gpu.js": "^2.9.4",
     "minify": "^5.1.0",
     "tap-spec": "^5.0.0",
     "tape": "^4.10.1"

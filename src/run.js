@@ -94,7 +94,7 @@ const run = options => {
 
     const func = (mat1, mat2) => {
       funcs.mat_mult.pipe.run(mat1, mat2);
-      const result = funcs.mat_mult.pipe.renderOutput();
+      const result = getTexture(funcs.mat_mult.pipe.renderOutput());
       return result;
     }
     

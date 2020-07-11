@@ -1,4 +1,5 @@
-const { benchmark: bench, multipleBenchmark } = require('./src/index'),
+const { GPU } = require('gpu.js'),
+  { benchmark: bench, multipleBenchmark } = require('./src/index'),
   writeFileSyncRecursive = require('./cli/write-file-recursive'),
   getOptionsInput = require('./cli/get-options'),
   parseArgs = require('./cli/parse-args'),
@@ -9,7 +10,10 @@ const { benchmark: bench, multipleBenchmark } = require('./src/index'),
   { br } = require('./cli/format'),
   { logRunTimeStats, logBuildTimeStats, logOverallStats } = require('./cli/log-stats');
 
-let options = {},
+let options = {
+    gpu: new GPU(),
+    cpu: new GPU({ mode: 'gpu' })
+  },
   multiple = false;
 const parsedArgs = parseArgs(process.argv);
 

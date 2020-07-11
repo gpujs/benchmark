@@ -20,6 +20,7 @@ This tool runs three benchmarks:
 - [Using With React Native](#expo)
 
 ### Installation
+NOTE: The package `gpu.js` needs to be installed separately.
 Benchmark is available on npm under the name `@gpujs/benchmark`.
 #### Using yarn
 ```sh
@@ -44,17 +45,20 @@ yarn build
 #### Using
 Include the benchmark dist file in the HTML file.
 ```html
+<script src="path/to/dist/gpu.min.js"></script> <!--gpu.js has tp be included separately-->
 <script src="path/to/dist/benchmark.min.js"></script>
 ```
 or, from the npm module
 ```html
+<script src="path/to/dist/gpu.min.js"></script> <!--gpu.js has tp be included separately-->
 <script src="path/to/node_modules/@gpujs/benchmark/dist/benchmark.min.js"></script>
 ```
 
 The exported function is `benchmark`.
 ```js
-const out = benchmark(options);
+const out = benchmark(options)
 ```
+##### NOTE: Options are is an Object. See [this](#options).
 
 ### Usage
 #### Javascript
@@ -76,7 +80,7 @@ OR run [Multiple Benchmarks](#multiple-benchmarks)
 const benchmarks = benchmark.multipleBenchmark(options)
 ```
 This returns the benchmarks in an Object. See [this](#output).
-##### NOTE: Options are optional parameters. See [this](#options).
+##### NOTE: Options are is an Object. See [this](#options).
 
 #### CLI
 1. Clone the repository and open the directory.
@@ -110,7 +114,7 @@ This will prompt you to enter the optional [options]
 ```sh
 yarn start options
 ```
-[options](#options) is a  stringified JSON object passed as an argument.
+[options](#options) is a stringified JSON object passed as an argument.
 ##### OR using `node`
 ```sh
 node ./index.js options
@@ -126,19 +130,26 @@ yarn start '{"num_iterations": 4}'
 The following options can be passed on to the `benchmark` or `multipleBenchmark` method.
 
 1. `benchmark` options:
+- `cpu`(*Object*) \*: A custom `GPU({mode: 'cpu'})` Object to benchmark specific versions of GPU.js(>= v2.0.0). Mandatory in everything except CLI.
+
+- `gpu`(*Object*) \*: A custom `GPU()` Object to benchmark specific versions of GPU.js(>= v2.0.0). (default: The version shipped with benchmark). Mandatory in everything except CLI.
+
 - `matrix_size`(*Integer*): The size of the uniform matrix used for benchmarking. (default: 512)
+
 - `num_iterations`(*Integer*): The number of iterations of run time calculation. (default: 1)
+
 - `logs`(*Boolean*): Toggles console logs by the library.
+
 - `cpu_benchmark`(*Boolean*): Toggles the benchmarking of CPU. False is recommended to big matrix sizes. (default: true)
-- `cpu`(*Object*): A custom `GPU({mode: 'cpu'})` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
-- `gpu`(*Object*): A custom `GPU()` Object to benchmark specific versions of GPU.js(>= v2.0.0-rc.14). (default: The version shipped with benchmark)
 
 2. `multipleBenchmark` options:
 [Multiple Benchmark](#multiple-benchmarks) options have the following structure.
 ```js
 {
   common_options: { // options common to all but can be overridden in range or in full_options, preference given to range
-    cpu_benchmark: false
+    cpu_benchmark: false,
+    cpu: new CPU({mode: 'cpu'}),
+    gpu: new GPU()
   },
   range: { // only one of this and full_options works
     option_name: 'matrix_size',

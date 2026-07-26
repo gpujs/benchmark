@@ -1,4 +1,6 @@
 ## Benchmark
+
+[![CI](https://github.com/gpujs/benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/gpujs/benchmark/actions/workflows/ci.yml)
 **Benchmark** is a simple benchmarking tool for GPU.js. This tool works both in JavaScript and CLI.
 This tool runs three benchmarks:
 1. [Matrix Multiplication](#matrix-multiplication)
@@ -34,12 +36,12 @@ npm install @gpujs/benchmark
 
 ### Browser Usage
 #### Building
-**NOTE**: The latest dist files are not included since v2.1.0 due to problems with browserify(https://github.com/gpujs/benchmark/issues/7). This issue will be addressed as soon as possible.
-**NOTE**: The dist files are also included in the npm module and GitHub repository, skip this step if you are not running a modified script locally.
-We use browserify and minify to build the distributable files `dist/benchmark.js` and `dist/benchmark.min.js`.
-After running the setup script, run the following command
+The npm module ships prebuilt `dist/benchmark.js` and `dist/benchmark.min.js`, so
+skip this step unless you are building a modified script locally.
+
 ```sh
-yarn build
+npm install
+npm run build
 ```
 
 #### Using
@@ -54,9 +56,10 @@ or, from the npm module
 <script src="path/to/node_modules/@gpujs/benchmark/dist/benchmark.min.js"></script>
 ```
 
-The exported function is `benchmark`.
+The bundle exposes a `gpujsBenchmark` global:
 ```js
-const out = benchmark(options)
+const out = gpujsBenchmark.benchmark(options);
+// gpujsBenchmark.multipleBenchmark(options) is also available
 ```
 ##### NOTE: Options are is an Object. See [this](#options).
 

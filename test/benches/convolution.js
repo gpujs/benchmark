@@ -43,9 +43,13 @@ test('matrix convolution benchmark test', t => {
   const gpuConvolve = funcs.gpu(expectedPaddedArray, kernel);
     cpuConvolve = funcs.cpu(expectedPaddedArray, kernel);
 
+  // kernels return Float32Array rows, so compare the values rather than the
+  // container types — tape 5's deepEqual distinguishes them where tape 4 did not
+  const toRows = matrix => Array.from(matrix, row => Array.from(row));
+
   t.deepEqual(cpuConvolve, gpuConvolve, 'CPU and GPU kernels return the same output.');
-  t.deepEqual(gpuConvolve, expectedConvolvedArray, 'GPU kernel works correctly.');
-  t.deepEqual(cpuConvolve, expectedConvolvedArray, 'CPU kernel works correctly.');
+  t.deepEqual(toRows(gpuConvolve), expectedConvolvedArray, 'GPU kernel works correctly.');
+  t.deepEqual(toRows(cpuConvolve), expectedConvolvedArray, 'CPU kernel works correctly.');
 
   t.end();
 })

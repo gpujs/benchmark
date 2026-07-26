@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install headless-gl runtime dependencies
+        # the benchmarks run real GPU.js kernels, which need a GL context
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb mesa-utils libgl1-mesa-dri libglu1-mesa libxi6 libxext6
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Test
+        run: xvfb-run -a --server-args="-ac -screen 0 1280x1024x24" npm test
+
+      - name: Build the browser bundle
+        run: npm run build

@@ -1,19 +1,26 @@
 const fs = require('fs'),
-  browserify = require('browserify'),
+  { rolldown } = require('rolldown'),
   { minify } = require('terser');
 
 const createDist = async () => {
-  const buffer = await new Promise((resolve, reject) => {
-    // standalone exposes the exports as a global; without it a browserify
-    // bundle exposes nothing and the documented browser usage cannot work
-    browserify('./src/index.js', { standalone: 'gpujsBenchmark' })
-      .bundle((err, result) => err ? reject(err) : resolve(result));
+  const bundle = await rolldown({
+    input: './src/index.js',
+    platform: 'browser',
   });
 
-  fs.writeFileSync('./dist/benchmark.js', buffer);
+  // umd + name is browserify's `standalone`: it exposes the exports as a
+  // global, without which the documented browser usage cannot work
+  const { output } = await bundle.generate({
+    format: 'umd',
+    name: 'gpujsBenchmark',
+  });
+  await bundle.close();
 
-  const { code } = await minify(buffer.toString(), { sourceMap: false });
-  fs.writeFileSync('./dist/benchmark.min.js', code);
+  const code = output[0].code;
+  fs.writeFileSync('./dist/benchmark.js', code);
+
+  const minified = await minify(code, { sourceMap: false });
+  fs.writeFileSync('./dist/benchmark.min.js', minified.code);
 };
 
 fs.mkdirSync('./dist', { recursive: true });

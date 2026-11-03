@@ -39,7 +39,11 @@
     "benchmark"
   ],
   "overrides": {
-    "node-gyp": "^11.5.0"
+    "node-gyp": "^11.5.0",
+    "minimatch@^9.0.0": "^11.0.4",
+    "minimatch@^10.0.0": "^11.0.4",
+    "glob@^10.0.0": "^14.0.3",
+    "glob@^13.0.0": "^14.0.3"
   },
   "files": [
     "src",
